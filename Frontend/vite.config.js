@@ -11,5 +11,11 @@ export default defineConfig({
         changeOrigin: true,
       }
     }
+  },
+  define: {
+    global: 'globalThis',
+  },
+  optimizeDeps: {
+    include: ['uuid']
   }
 })
