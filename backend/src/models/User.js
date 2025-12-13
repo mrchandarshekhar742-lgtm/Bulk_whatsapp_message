@@ -48,15 +48,7 @@ const User = sequelize.define(
       type: DataTypes.STRING(100),
       unique: true,
     },
-    ultramsg_instance_id: {
-      type: DataTypes.STRING(100),
-    },
-    ultramsg_token: {
-      type: DataTypes.STRING(255),
-    },
-    fivesim_api_key: {
-      type: DataTypes.STRING(255),
-    },
+
     is_active: {
       type: DataTypes.BOOLEAN,
       defaultValue: true,
