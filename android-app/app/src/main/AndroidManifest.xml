@@ -24,6 +24,7 @@
         android:roundIcon="@drawable/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.WhatsAppProBulkSender"
+        android:usesCleartextTraffic="true"
         android:networkSecurityConfig="@xml/network_security_config"
         tools:targetApi="31">
         
@@ -38,6 +39,8 @@
             </intent-filter>
         </activity>
         
+
+        
         <!-- Settings Activity -->
         <activity
             android:name=".ui.SettingsActivity"
@@ -51,6 +54,19 @@
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <!-- Accessibility Service -->
+        <service
+            android:name=".service.WhatsAppAccessibilityService"
+            android:exported="false"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
         
         <!-- Boot Receiver -->
         <receiver

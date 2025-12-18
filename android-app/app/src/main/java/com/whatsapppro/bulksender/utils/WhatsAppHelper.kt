@@ -38,15 +38,20 @@ object WhatsAppHelper {
                 return false
             }
             
-            // Clean phone number (remove spaces, dashes, etc.)
-            val cleanNumber = phoneNumber.replace(Regex("[^0-9+]"), "")
+            // Clean phone number to only contain digits
+            var cleanNumber = phoneNumber.replace(Regex("[^0-9]"), "")
             
+            // If the number is 10 digits long, assume it's an Indian number and add the country code
+            if (cleanNumber.length == 10) {
+                cleanNumber = "91$cleanNumber"
+            }
+
             // Encode message
             val encodedMessage = URLEncoder.encode(message, "UTF-8")
             
             // Create WhatsApp intent
             val intent = Intent(Intent.ACTION_VIEW).apply {
-                data = Uri.parse("https://api.whatsapp.com/send?phone=$cleanNumber&text=$encodedMessage")
+                data = Uri.parse("https://wa.me/$cleanNumber?text=$encodedMessage")
                 setPackage(WHATSAPP_PACKAGE)
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
@@ -65,11 +70,11 @@ object WhatsAppHelper {
      * Ensures it starts with country code
      */
     fun formatPhoneNumber(phoneNumber: String): String {
-        var formatted = phoneNumber.replace(Regex("[^0-9+]"), "")
+        var formatted = phoneNumber.replace(Regex("[^0-9]"), "")
         
-        // If doesn't start with +, assume it needs one
-        if (!formatted.startsWith("+")) {
-            formatted = "+$formatted"
+        // If the number is 10 digits long, assume it's an Indian number and add the country code
+        if (formatted.length == 10) {
+            formatted = "91$formatted"
         }
         
         return formatted

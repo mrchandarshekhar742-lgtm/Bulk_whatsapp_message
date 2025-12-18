@@ -13,8 +13,9 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.whatsapppro.bulksender.R
 import com.whatsapppro.bulksender.WhatsAppProApplication
-import com.whatsapppro.bulksender.data.local.AppDatabase
-import com.whatsapppro.bulksender.data.local.MessageLog
+// Temporarily commented out Room database imports
+// import com.whatsapppro.bulksender.data.local.AppDatabase
+// import com.whatsapppro.bulksender.data.local.MessageLog
 import com.whatsapppro.bulksender.data.models.*
 import com.whatsapppro.bulksender.network.WebSocketManager
 import com.whatsapppro.bulksender.ui.MainActivity
@@ -32,12 +33,13 @@ class WhatsAppSenderService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var statusUpdateJob: Job? = null
     
-    private lateinit var database: AppDatabase
+    // Temporarily commented out database
+    // private lateinit var database: AppDatabase
     
     override fun onCreate() {
         super.onCreate()
         Log.d(tag, "Service created")
-        database = AppDatabase.getDatabase(this)
+        // database = AppDatabase.getDatabase(this)
     }
     
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -158,17 +160,20 @@ class WhatsAppSenderService : Service() {
             return
         }
         
-        // Send message
+        // Send message (opens WhatsApp with typed message)
         val success = WhatsAppHelper.sendMessage(this, recipientNumber, messageText)
         
         if (success) {
+            // Show notification to user to press send
+            updateNotification("WhatsApp opened - Please press SEND button")
             // Wait a bit for WhatsApp to process, then report success
             serviceScope.launch {
                 delay(3000)
                 reportMessageSent(recipientNumber)
                 PrefsHelper.incrementMessagesSentToday(this@WhatsAppSenderService)
                 
-                // Save to local database
+                // Save to local database (temporarily commented out)
+                /*
                 database.messageLogDao().insert(
                     MessageLog(
                         recipientNumber = recipientNumber,
@@ -179,6 +184,7 @@ class WhatsAppSenderService : Service() {
                         networkType = DeviceInfoCollector.getNetworkType(this@WhatsAppSenderService)
                     )
                 )
+                */
                 
                 withContext(Dispatchers.Main) {
                     updateNotification("Sent: ${PrefsHelper.getMessagesSentToday(this@WhatsAppSenderService)} today")
@@ -188,7 +194,8 @@ class WhatsAppSenderService : Service() {
             reportMessageFailed(recipientNumber, "Failed to launch WhatsApp")
             PrefsHelper.incrementTotalMessagesFailed(this)
             
-            // Save to local database
+            // Save to local database (temporarily commented out)
+            /*
             serviceScope.launch {
                 database.messageLogDao().insert(
                     MessageLog(
@@ -200,6 +207,7 @@ class WhatsAppSenderService : Service() {
                     )
                 )
             }
+            */
         }
     }
     

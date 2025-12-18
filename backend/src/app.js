@@ -13,69 +13,111 @@ const logger = require('./utils/logger');
 
 const app = express();
 
-// ============================================================================
-// MIDDLEWARE
-// ============================================================================
+/* ============================================================================
+   IMPORTANT FOR NGINX + HTTPS
+============================================================================ */
+app.set('trust proxy', 1);
 
-// Security
+/* ============================================================================
+   SECURITY
+============================================================================ */
 app.use(helmet());
-app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:5174'],
-  credentials: true,
-}));
 
-// Rate limiting
-const globalWindowMs = parseInt(process.env.RATE_LIMIT_WINDOW || 15, 10) * 60 * 1000;
-const defaultGlobalMax = process.env.NODE_ENV === 'development' ? 1000 : 100;
+/* ============================================================================
+   CORS CONFIG (PUBLIC + LOCAL)
+============================================================================ */
+const allowedOrigins = [
+  'https://wxon.in',
+  'https://www.wxon.in',
+  'http://localhost:5173',
+  'http://localhost:5174',
+];
+
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      // allow server-to-server / curl / postman
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('CORS not allowed from this origin'));
+      }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  })
+);
+
+/* ============================================================================
+   RATE LIMITING
+============================================================================ */
+const globalWindowMs =
+  parseInt(process.env.RATE_LIMIT_WINDOW || 15, 10) * 60 * 1000;
+
+const defaultGlobalMax =
+  process.env.NODE_ENV === 'development' ? 1000 : 300;
+
 const globalLimiter = rateLimit({
   windowMs: globalWindowMs,
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || defaultGlobalMax, 10),
-  message: 'Too many requests from this IP, please try again later.',
+  max: parseInt(
+    process.env.RATE_LIMIT_MAX_REQUESTS || defaultGlobalMax,
+    10
+  ),
   standardHeaders: true,
   legacyHeaders: false,
+  message: {
+    error: 'Too many requests, please try again later.',
+  },
 });
+
 app.use(globalLimiter);
 
-// Body parsing
+/* ============================================================================
+   BODY PARSERS
+============================================================================ */
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Request logging
+/* ============================================================================
+   REQUEST LOGGING
+============================================================================ */
 app.use((req, res, next) => {
-  logger.info(`${req.method} ${req.path}`, { ip: req.ip });
+  logger.info(`${req.method} ${req.originalUrl}`, {
+    ip: req.ip,
+    userAgent: req.headers['user-agent'],
+  });
   next();
 });
 
-// ============================================================================
-// ROUTES
-// ============================================================================
-
+/* ============================================================================
+   ROUTES
+============================================================================ */
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    environment: process.env.NODE_ENV,
+    timestamp: new Date().toISOString(),
+  });
 });
 
-// Auth routes
 app.use('/api/auth', authRoutes);
-
-// Excel routes
 app.use('/api/excel', excelRoutes);
-
-// Device routes
 app.use('/api/devices', deviceRoutes);
-
-// Campaign routes
 app.use('/api/campaigns', campaignRoutes);
 
-// ============================================================================
-// ERROR HANDLING
-// ============================================================================
-
-// 404 handler
+/* ============================================================================
+   404 HANDLER
+============================================================================ */
 app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-// Global error handler
+/* ============================================================================
+   GLOBAL ERROR HANDLER
+============================================================================ */
 app.use(errorHandler);
 
 module.exports = app;

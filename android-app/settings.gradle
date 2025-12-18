@@ -16,3 +16,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "WhatsApp Pro Bulk Sender"
 include ':app'
+
+// Removed toolchainManagement to fix Gradle compatibility

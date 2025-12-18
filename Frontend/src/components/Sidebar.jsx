@@ -11,11 +11,11 @@ export function Sidebar() {
 
   const menuItems = [
     { icon: MdDashboard, label: 'Dashboard', path: '/dashboard' },
-    { icon: MdDescription, label: 'Excel Files', path: '/campaigns' },
-    { icon: MdUpload, label: 'Upload', path: '/excel' },
     { icon: MdPhoneAndroid, label: 'Devices', path: '/devices' },
     { icon: MdSend, label: 'Create Campaign', path: '/create-campaign' },
     { icon: MdHistory, label: 'Campaign Logs', path: '/logs' },
+    { icon: MdUpload, label: 'Excel Upload', path: '/excel' },
+    { icon: MdDescription, label: 'Campaigns', path: '/campaigns' },
     { icon: MdPerson, label: 'Profile', path: '/profile' },
   ];
 
@@ -52,7 +52,7 @@ export function Sidebar() {
             </div>
             <div className="flex-1 min-w-0">
               <h1 className="font-bold text-base sm:text-lg text-white truncate">WhatsApp Pro</h1>
-              <p className="text-xs text-secondary-400 truncate">Bulk Messaging</p>
+              <p className="text-xs text-secondary-400 truncate">Bulk Sender</p>
             </div>
           </Link>
 

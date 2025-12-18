@@ -42,6 +42,7 @@ class WebSocketManager(
         _connectionState.value = ConnectionState.CONNECTING
         
         val url = "$serverUrl?token=$deviceToken"
+        Log.d(TAG, "Attempting to connect to: $url")
         val request = Request.Builder()
             .url(url)
             .build()
@@ -71,7 +72,19 @@ class WebSocketManager(
             }
             
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                Log.e(TAG, "WebSocket error: ${t.message}", t)
+                Log.e(TAG, "!!! WebSocket Connection FAILED !!!")
+                Log.e(TAG, "Throwable: ${t.javaClass.simpleName}, Message: ${t.message}")
+                if (response != null) {
+                    Log.e(TAG, "Response Code: ${response.code}, Message: ${response.message}")
+                    try {
+                        val errorBody = response.body?.string()
+                        Log.e(TAG, "Response Body: $errorBody")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Could not read error body: ${e.message}")
+                    }
+                } else {
+                    Log.e(TAG, "No response received from server.")
+                }
                 _connectionState.value = ConnectionState.ERROR
                 stopHeartbeat()
                 scheduleReconnect()

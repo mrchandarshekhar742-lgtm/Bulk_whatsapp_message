@@ -1,7 +1,6 @@
 plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
-    id 'kotlin-kapt'
 }
 
 android {
@@ -33,7 +32,7 @@ android {
     kotlinOptions {
         jvmTarget = '17'
     }
-    
+
     buildFeatures {
         viewBinding true
     }
@@ -61,10 +60,11 @@ dependencies {
     // JSON (Gson)
     implementation 'com.google.code.gson:gson:2.10.1'
     
-    // Room Database (for local logs)
+    // Room Database
     implementation 'androidx.room:room-runtime:2.6.1'
     implementation 'androidx.room:room-ktx:2.6.1'
-    kapt 'androidx.room:room-compiler:2.6.1'
+    // Temporarily disable KSP for Room to simplify build
+    // ksp 'androidx.room:room-compiler:2.6.1'
     
     // WorkManager (for background tasks)
     implementation 'androidx.work:work-runtime-ktx:2.9.0'

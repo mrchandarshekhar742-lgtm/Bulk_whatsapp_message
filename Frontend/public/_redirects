@@ -1,0 +1,4 @@
+# Netlify redirects (if deploying to Netlify instead of GitHub Pages)
+/*    /index.html   200
+
+# GitHub Pages doesn't support _redirects, but keeping for reference

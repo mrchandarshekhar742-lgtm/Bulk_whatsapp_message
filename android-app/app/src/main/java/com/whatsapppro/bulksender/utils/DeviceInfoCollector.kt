@@ -101,7 +101,9 @@ object DeviceInfoCollector {
                 ) == PackageManager.PERMISSION_GRANTED
             ) {
                 val telephonyManager = context.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
-                return telephonyManager.line1Number
+                @Suppress("DEPRECATION")
+                val phoneNumber = telephonyManager.line1Number
+                return phoneNumber
             } else {
                 return "Not available"
             }

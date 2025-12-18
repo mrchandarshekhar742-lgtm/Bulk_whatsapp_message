@@ -1,6 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">WhatsApp Bulk Sender</string>
+    <string name="app_name">WhatsApp Pro Bulk Sender</string>
     <string name="settings">Settings</string>
-    <string name="notification_channel_name">WhatsApp Sender Service</string>
-    <string name="notification_channel_description">Shows status of WhatsApp bulk sender service</string>
+    <string name="accessibility_service_description">WhatsApp Pro Bulk Sender needs accessibility permission to automatically send messages. This service will only interact with WhatsApp to click the send button after typing messages.</string>
 </resources>

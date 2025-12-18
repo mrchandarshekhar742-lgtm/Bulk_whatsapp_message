@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
+import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
 import android.view.WindowManager
@@ -40,7 +41,8 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         
-        setSupportActionBar(binding.toolbar)
+        // Skip toolbar setup to avoid ActionBar conflict
+        // setSupportActionBar(binding.toolbar)
         
         setupUI()
         checkPermissions()
@@ -239,8 +241,21 @@ class MainActivity : AppCompatActivity() {
 
     private fun onPermissionsGranted() {
         startAutoRefresh()
+        requestAccessibilityPermission()
     }
     
+    private fun requestAccessibilityPermission() {
+        AlertDialog.Builder(this)
+            .setTitle("Enable Accessibility Service")
+            .setMessage("To automatically send WhatsApp messages, please enable accessibility service for this app in Settings.")
+            .setPositiveButton("Open Settings") { _, _ ->
+                val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                startActivity(intent)
+            }
+            .setNegativeButton("Later", null)
+            .show()
+    }
+
     private fun requestBatteryOptimizationExemption() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             val powerManager = getSystemService(POWER_SERVICE) as PowerManager
@@ -262,18 +277,5 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
-    override fun onCreateOptionsMenu(menu: Menu): Boolean {
-        menuInflater.inflate(R.menu.menu_main, menu)
-        return true
-    }
-    
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        return when (item.itemId) {
-            R.id.action_settings -> {
-                startActivity(Intent(this, SettingsActivity::class.java))
-                true
-            }
-            else -> super.onOptionsItemSelected(item)
-        }
-    }
+    // Menu functions completely removed to avoid missing references
 }
