@@ -137,7 +137,9 @@ class WebSocketManager(
         heartbeatJob?.cancel()
         heartbeatJob = scope.launch {
             while (isActive && _connectionState.value == ConnectionState.CONNECTED) {
-                delay(30000) // 30 seconds
+                // Generate random heartbeat between 25-35 seconds
+                val randomHeartbeat = (25000..35000).random()
+                delay(randomHeartbeat.toLong())
                 sendHeartbeat()
             }
         }
@@ -156,12 +158,14 @@ class WebSocketManager(
     private fun scheduleReconnect() {
         reconnectJob?.cancel()
         reconnectJob = scope.launch {
-            var delay = 1000L
+            var baseDelay = 1000L
             while (isActive && _connectionState.value != ConnectionState.CONNECTED) {
-                Log.d(TAG, "Reconnecting in ${delay}ms...")
-                delay(delay)
+                // Add randomness to reconnection delay
+                val randomDelay = baseDelay + (0..2000).random()
+                Log.d(TAG, "Reconnecting in ${randomDelay}ms...")
+                delay(randomDelay)
                 connect()
-                delay = (delay * 2).coerceAtMost(30000) // Max 30 seconds
+                baseDelay = (baseDelay * 2).coerceAtMost(30000) // Max 30 seconds
             }
         }
     }

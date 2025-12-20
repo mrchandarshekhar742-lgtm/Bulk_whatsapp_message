@@ -26,12 +26,12 @@ router.post('/',
     body('excel_record_id').isInt().withMessage('Excel record ID is required'),
     body('message_template').notEmpty().withMessage('Message template is required'),
     body('device_ids').isArray({ min: 1 }).withMessage('At least one device must be selected'),
-    body('rotation_mode').optional().isIn(['RANDOM', 'ROUND_ROBIN', 'LEAST_USED', 'WARMUP_AWARE']),
+    body('rotation_mode').optional().isIn(['SMART_ROTATION', 'RANDOM', 'ROUND_ROBIN', 'LEAST_USED', 'WARMUP_AWARE']),
   ],
   validate,
   async (req, res) => {
     try {
-      const { name, excel_record_id, message_template, device_ids, rotation_mode = 'WARMUP_AWARE' } = req.body;
+      const { name, excel_record_id, message_template, device_ids, rotation_mode = 'SMART_ROTATION' } = req.body;
 
       // Verify Excel record belongs to user
       const excelRecord = await ExcelRecord.findOne({
@@ -86,9 +86,10 @@ router.post('/',
         created_at: new Date(),
       };
 
-      // Queue messages to devices
+      // Queue messages to devices with per-device delay management
       let assignedIndex = 0;
       const deviceIdsList = Object.keys(distribution);
+      const deviceDelayTracker = new Map(); // Track cumulative delay per device
 
       for (const recipient of recipients) {
         // Select device based on rotation
@@ -130,12 +131,38 @@ router.post('/',
           priority: 5,
         });
 
-        // Send command if device is online
+        // Send command with per-device delay management
         if (DeviceWebSocketManager.isDeviceOnline(deviceId)) {
-          await DeviceWebSocketManager.sendCommand(deviceId, command);
+          // Get current delay for this device (starts at 0)
+          let currentDeviceDelay = deviceDelayTracker.get(deviceId) || 0;
+          
+          // Generate random delay between 2-10 seconds for this message
+          const randomDelaySeconds = Math.floor(Math.random() * 9) + 2; // 2-10 seconds
+          
+          // If device is being reused, add extra delay to prevent spam detection
+          if (currentDeviceDelay > 0) {
+            const extraDelay = Math.floor(Math.random() * 8) + 5; // 5-12 seconds extra for reused device
+            currentDeviceDelay += extraDelay * 1000;
+          }
+          
+          // Add base delay
+          currentDeviceDelay += randomDelaySeconds * 1000;
+          
+          // Update tracker
+          deviceDelayTracker.set(deviceId, currentDeviceDelay);
+          
+          setTimeout(async () => {
+            await DeviceWebSocketManager.sendCommand(deviceId, command);
+          }, currentDeviceDelay);
         }
 
         assignedIndex++;
+        
+        // Add small delay between queuing messages to spread the load
+        if (assignedIndex < recipients.length) {
+          const queueDelay = Math.floor(Math.random() * 2) + 1; // 1-2 seconds between queue operations
+          await new Promise(resolve => setTimeout(resolve, queueDelay * 1000));
+        }
       }
 
       res.status(201).json({
@@ -165,12 +192,12 @@ router.post('/manual',
     body('phone_numbers').isArray({ min: 1 }).withMessage('At least one phone number is required'),
     body('message').notEmpty().withMessage('Message is required'),
     body('device_ids').isArray({ min: 1 }).withMessage('At least one device must be selected'),
-    body('rotation_mode').optional().isIn(['RANDOM', 'ROUND_ROBIN', 'LEAST_USED', 'WARMUP_AWARE']),
+    body('rotation_mode').optional().isIn(['SMART_ROTATION', 'RANDOM', 'ROUND_ROBIN', 'LEAST_USED', 'WARMUP_AWARE']),
   ],
   validate,
   async (req, res) => {
     try {
-      const { name, phone_numbers, message, device_ids, rotation_mode = 'WARMUP_AWARE' } = req.body;
+      const { name, phone_numbers, message, device_ids, rotation_mode = 'SMART_ROTATION' } = req.body;
 
       // Verify devices belong to user and are available
       const devices = await Device.findAll({
@@ -213,8 +240,9 @@ router.post('/manual',
         created_at: new Date(),
       };
 
-      // Queue messages to devices
+      // Queue messages to devices with per-device delay management
       let queuedCount = 0;
+      const deviceDelayTracker = new Map(); // Track cumulative delay per device
 
       for (const phoneNumber of validNumbers) {
         // Select device based on rotation
@@ -242,12 +270,38 @@ router.post('/manual',
           priority: 5,
         });
 
-        // Send command if device is online
+        // Send command with per-device delay management
         if (DeviceWebSocketManager.isDeviceOnline(deviceId)) {
-          await DeviceWebSocketManager.sendCommand(deviceId, command);
+          // Get current delay for this device (starts at 0)
+          let currentDeviceDelay = deviceDelayTracker.get(deviceId) || 0;
+          
+          // Generate random delay between 2-10 seconds for this message
+          const randomDelaySeconds = Math.floor(Math.random() * 9) + 2; // 2-10 seconds
+          
+          // If device is being reused, add extra delay to prevent spam detection
+          if (currentDeviceDelay > 0) {
+            const extraDelay = Math.floor(Math.random() * 8) + 5; // 5-12 seconds extra for reused device
+            currentDeviceDelay += extraDelay * 1000;
+          }
+          
+          // Add base delay
+          currentDeviceDelay += randomDelaySeconds * 1000;
+          
+          // Update tracker
+          deviceDelayTracker.set(deviceId, currentDeviceDelay);
+          
+          setTimeout(async () => {
+            await DeviceWebSocketManager.sendCommand(deviceId, command);
+          }, currentDeviceDelay);
         }
 
         queuedCount++;
+        
+        // Add small delay between queuing messages to spread the load
+        if (queuedCount < validNumbers.length) {
+          const queueDelay = Math.floor(Math.random() * 2) + 1; // 1-2 seconds between queue operations
+          await new Promise(resolve => setTimeout(resolve, queueDelay * 1000));
+        }
       }
 
       res.status(201).json({
@@ -459,8 +513,10 @@ router.post('/retry-failed',
         });
       }
 
-      // Retry each failed message
+      // Retry each failed message with per-device delay management
       let retriedCount = 0;
+      const deviceDelayTracker = new Map(); // Track cumulative delay per device for retries
+      
       for (const log of failedLogs) {
         // Check if device can send
         const canSend = await DeviceRotationEngine.canDeviceSend(log.device_id);
@@ -483,12 +539,38 @@ router.post('/retry-failed',
         // Update log status
         await log.update({ status: 'QUEUED', error_message: null });
 
-        // Send command if device is online
+        // Send command with per-device delay management for retry
         if (DeviceWebSocketManager.isDeviceOnline(log.device_id)) {
-          await DeviceWebSocketManager.sendCommand(log.device_id, command);
+          // Get current delay for this device (starts at 0)
+          let currentDeviceDelay = deviceDelayTracker.get(log.device_id) || 0;
+          
+          // Generate random delay between 3-12 seconds for retry (slightly longer)
+          const randomDelaySeconds = Math.floor(Math.random() * 10) + 3; // 3-12 seconds
+          
+          // If device is being reused for retry, add extra delay
+          if (currentDeviceDelay > 0) {
+            const extraDelay = Math.floor(Math.random() * 10) + 8; // 8-17 seconds extra for reused device retry
+            currentDeviceDelay += extraDelay * 1000;
+          }
+          
+          // Add base delay
+          currentDeviceDelay += randomDelaySeconds * 1000;
+          
+          // Update tracker
+          deviceDelayTracker.set(log.device_id, currentDeviceDelay);
+          
+          setTimeout(async () => {
+            await DeviceWebSocketManager.sendCommand(log.device_id, command);
+          }, currentDeviceDelay);
         }
 
         retriedCount++;
+        
+        // Add delay between retry operations
+        if (retriedCount < failedLogs.length) {
+          const retryDelay = Math.floor(Math.random() * 3) + 2; // 2-4 seconds between retries
+          await new Promise(resolve => setTimeout(resolve, retryDelay * 1000));
+        }
       }
 
       res.json({

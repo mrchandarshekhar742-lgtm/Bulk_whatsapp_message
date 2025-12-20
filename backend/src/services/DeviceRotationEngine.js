@@ -5,6 +5,8 @@ const logger = require('../utils/logger');
 class DeviceRotationEngine {
   constructor() {
     this.lastUsedIndex = 0; // For round-robin
+    this.deviceLastUsed = new Map(); // Track when each device was last used
+    this.deviceMessageCount = new Map(); // Track messages sent per device in current session
   }
 
   /**
@@ -13,7 +15,7 @@ class DeviceRotationEngine {
    * @param {String} mode - RANDOM, ROUND_ROBIN, LEAST_USED, WARMUP_AWARE
    * @returns {Number} - Selected device ID
    */
-  async selectDevice(deviceIds, mode = 'WARMUP_AWARE') {
+  async selectDevice(deviceIds, mode = 'SMART_ROTATION') {
     if (!deviceIds || deviceIds.length === 0) {
       throw new Error('No devices available');
     }
@@ -43,6 +45,10 @@ class DeviceRotationEngine {
     let selectedDevice;
 
     switch (mode) {
+      case 'SMART_ROTATION':
+        selectedDevice = this.selectSmartRotation(availableDevices);
+        break;
+
       case 'RANDOM':
         selectedDevice = this.selectRandom(availableDevices);
         break;
@@ -60,11 +66,78 @@ class DeviceRotationEngine {
         break;
 
       default:
-        selectedDevice = this.selectWarmupAware(availableDevices);
+        selectedDevice = this.selectSmartRotation(availableDevices);
     }
 
     logger.info(`Selected device ${selectedDevice.id} (${selectedDevice.device_label}) using ${mode} mode`);
     return selectedDevice.id;
+  }
+
+  /**
+   * Smart rotation - combines all best practices
+   * Considers warmup stage, capacity, usage, and adds randomness
+   */
+  selectSmartRotation(devices) {
+    // Calculate scores for each device
+    const devicesWithScores = devices.map(device => {
+      const remainingCapacity = device.daily_limit - device.messages_sent_today;
+      const utilizationRate = device.messages_sent_today / device.daily_limit;
+      const lastUsedTime = this.deviceLastUsed.get(device.id) || 0;
+      const timeSinceLastUse = Date.now() - lastUsedTime;
+      const sessionMessageCount = this.deviceMessageCount.get(device.id) || 0;
+
+      // Warmup stage score (higher is better)
+      const stageScores = { STAGE_4: 4, STAGE_3: 3, STAGE_2: 2, STAGE_1: 1 };
+      const warmupScore = stageScores[device.warmup_stage] || 1;
+
+      // Capacity score (more remaining capacity = higher score)
+      const capacityScore = remainingCapacity / device.daily_limit;
+
+      // Usage score (less used today = higher score)
+      const usageScore = 1 - utilizationRate;
+
+      // Time score (longer since last use = higher score)
+      const timeScore = Math.min(timeSinceLastUse / (5 * 60 * 1000), 1); // Max score after 5 minutes
+
+      // Session usage penalty (less used in current session = higher score)
+      const sessionScore = Math.max(0, 1 - (sessionMessageCount * 0.1));
+
+      // Random factor to prevent predictable patterns
+      const randomFactor = Math.random() * 0.3; // 30% randomness
+
+      // Combined score with weights
+      const totalScore = (
+        warmupScore * 0.25 +      // 25% warmup stage
+        capacityScore * 0.25 +    // 25% remaining capacity
+        usageScore * 0.20 +       // 20% daily usage
+        timeScore * 0.15 +        // 15% time since last use
+        sessionScore * 0.10 +     // 10% session usage
+        randomFactor * 0.05       // 5% randomness
+      );
+
+      return {
+        device,
+        score: totalScore,
+        remainingCapacity,
+        utilizationRate,
+        timeSinceLastUse,
+        sessionMessageCount,
+      };
+    });
+
+    // Sort by score (highest first)
+    devicesWithScores.sort((a, b) => b.score - a.score);
+
+    // Select the best device
+    const selectedDevice = devicesWithScores[0].device;
+
+    // Update tracking
+    this.deviceLastUsed.set(selectedDevice.id, Date.now());
+    this.deviceMessageCount.set(selectedDevice.id, 
+      (this.deviceMessageCount.get(selectedDevice.id) || 0) + 1
+    );
+
+    return selectedDevice;
   }
 
   /**
@@ -132,7 +205,7 @@ class DeviceRotationEngine {
    * @param {String} mode - Rotation mode
    * @returns {Object} - Device distribution map { deviceId: messageCount }
    */
-  async distributeMessages(deviceIds, messageCount, mode = 'WARMUP_AWARE') {
+  async distributeMessages(deviceIds, messageCount, mode = 'SMART_ROTATION') {
     const devices = await Device.findAll({
       where: {
         id: { [Op.in]: deviceIds },
@@ -164,37 +237,51 @@ class DeviceRotationEngine {
     }
 
     // Distribute based on mode
-    if (mode === 'WARMUP_AWARE') {
-      // Distribute proportionally based on remaining capacity
+    if (mode === 'SMART_ROTATION' || mode === 'WARMUP_AWARE') {
+      // Smart distribution based on capacity and warmup stages
       let remainingMessages = messageCount;
 
-      for (const device of availableDevices) {
+      // Sort devices by smart score for distribution
+      const devicesWithScores = availableDevices.map(device => {
         const remainingCapacity = device.daily_limit - device.messages_sent_today;
-        const proportion = remainingCapacity / totalCapacity;
+        const utilizationRate = device.messages_sent_today / device.daily_limit;
+        const stageScores = { STAGE_4: 4, STAGE_3: 3, STAGE_2: 2, STAGE_1: 1 };
+        const warmupScore = stageScores[device.warmup_stage] || 1;
+        
+        // Smart score for distribution
+        const score = (warmupScore * 0.4) + (remainingCapacity / device.daily_limit * 0.6);
+        
+        return { device, score, remainingCapacity };
+      });
+
+      // Sort by score (highest first)
+      devicesWithScores.sort((a, b) => b.score - a.score);
+
+      // Distribute proportionally based on scores
+      const totalScore = devicesWithScores.reduce((sum, item) => sum + item.score, 0);
+
+      for (const item of devicesWithScores) {
+        const proportion = item.score / totalScore;
         const assignedCount = Math.min(
           Math.floor(messageCount * proportion),
-          remainingCapacity,
+          item.remainingCapacity,
           remainingMessages
         );
 
         if (assignedCount > 0) {
-          distribution[device.id] = assignedCount;
+          distribution[item.device.id] = assignedCount;
           remainingMessages -= assignedCount;
         }
       }
 
-      // Assign remaining messages to device with most capacity
+      // Assign remaining messages to best device
       if (remainingMessages > 0) {
-        const deviceWithMostCapacity = availableDevices.reduce((max, device) => 
-          (device.daily_limit - device.messages_sent_today) > 
-          (max.daily_limit - max.messages_sent_today) ? device : max
-        );
-        distribution[deviceWithMostCapacity.id] = 
-          (distribution[deviceWithMostCapacity.id] || 0) + remainingMessages;
+        const bestDevice = devicesWithScores[0].device;
+        distribution[bestDevice.id] = (distribution[bestDevice.id] || 0) + remainingMessages;
       }
 
     } else {
-      // Simple round-robin distribution
+      // Simple round-robin distribution for other modes
       let deviceIndex = 0;
       for (let i = 0; i < messageCount; i++) {
         const device = availableDevices[deviceIndex % availableDevices.length];

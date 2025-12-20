@@ -168,7 +168,9 @@ class WhatsAppSenderService : Service() {
             updateNotification("WhatsApp opened - Please press SEND button")
             // Wait a bit for WhatsApp to process, then report success
             serviceScope.launch {
-                delay(3000)
+                // Generate random delay between 2-8 seconds
+                val randomDelay = (2000..8000).random()
+                delay(randomDelay.toLong())
                 reportMessageSent(recipientNumber)
                 PrefsHelper.incrementMessagesSentToday(this@WhatsAppSenderService)
                 
@@ -279,7 +281,9 @@ class WhatsAppSenderService : Service() {
         statusUpdateJob?.cancel()
         statusUpdateJob = serviceScope.launch {
             while (isActive) {
-                delay(300000) // 5 minutes
+                // Generate random status update between 4-7 minutes
+                val randomStatusUpdate = (240000..420000).random()
+                delay(randomStatusUpdate.toLong())
                 sendStatusUpdate()
             }
         }

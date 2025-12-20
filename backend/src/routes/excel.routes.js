@@ -25,11 +25,69 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 function parseWorkbook(filePath) {
-  const wb = XLSX.readFile(filePath, { cellDates: true });
-  const sheetName = wb.SheetNames[0];
-  const sheet = wb.Sheets[sheetName];
-  const json = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-  return json;
+  try {
+    const wb = XLSX.readFile(filePath, { cellDates: true });
+    const sheetName = wb.SheetNames[0];
+    const sheet = wb.Sheets[sheetName];
+    let json = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    
+    // Normalize column names and validate data
+    json = json.map(row => {
+      const normalizedRow = {};
+      
+      // Normalize column names (case-insensitive mapping)
+      Object.keys(row).forEach(key => {
+        const lowerKey = key.toLowerCase().trim();
+        
+        // Map common variations to standard names
+        if (lowerKey.includes('name') || lowerKey === 'contact' || lowerKey === 'person') {
+          normalizedRow.Name = row[key]?.toString().trim() || '';
+        } else if (lowerKey.includes('phone') || lowerKey.includes('mobile') || lowerKey.includes('number')) {
+          let phone = row[key]?.toString().trim() || '';
+          // Clean phone number
+          phone = phone.replace(/[^\d+]/g, ''); // Remove all except digits and +
+          if (phone && !phone.startsWith('+')) {
+            // Add +91 for Indian numbers if no country code
+            if (phone.length === 10) {
+              phone = '+91' + phone;
+            } else if (phone.length === 12 && phone.startsWith('91')) {
+              phone = '+' + phone;
+            }
+          }
+          normalizedRow.Phone = phone;
+        } else if (lowerKey.includes('email') || lowerKey.includes('mail')) {
+          normalizedRow.Email = row[key]?.toString().trim() || '';
+        } else if (lowerKey.includes('company') || lowerKey.includes('organization')) {
+          normalizedRow.Company = row[key]?.toString().trim() || '';
+        } else if (lowerKey.includes('city') || lowerKey.includes('location')) {
+          normalizedRow.City = row[key]?.toString().trim() || '';
+        } else if (lowerKey.includes('product') || lowerKey.includes('item')) {
+          normalizedRow.Product = row[key]?.toString().trim() || '';
+        } else if (lowerKey.includes('amount') || lowerKey.includes('price') || lowerKey.includes('cost')) {
+          normalizedRow.Amount = row[key]?.toString().trim() || '';
+        } else {
+          // Keep other columns as-is but capitalize first letter
+          const capitalizedKey = key.charAt(0).toUpperCase() + key.slice(1);
+          normalizedRow[capitalizedKey] = row[key]?.toString().trim() || '';
+        }
+      });
+      
+      return normalizedRow;
+    });
+    
+    // Filter out rows without Name or Phone
+    json = json.filter(row => row.Name && row.Phone);
+    
+    // Validate phone numbers
+    json = json.filter(row => {
+      const phone = row.Phone;
+      return phone && phone.startsWith('+') && phone.length >= 10;
+    });
+    
+    return json;
+  } catch (error) {
+    throw new Error(`Failed to parse Excel file: ${error.message}`);
+  }
 }
 
 // POST /api/excel/upload
@@ -47,6 +105,22 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 
     // Parse rows
     const rows = parseWorkbook(req.file.path);
+    
+    if (rows.length === 0) {
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ 
+        error: 'No valid data found. Please ensure your Excel file has Name and Phone columns with valid data.' 
+      });
+    }
+
+    // Validate required columns
+    const firstRow = rows[0];
+    if (!firstRow.Name || !firstRow.Phone) {
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ 
+        error: 'Required columns missing. Please ensure your Excel file has Name and Phone columns.' 
+      });
+    }
 
     const record = await ExcelRecord.create({
       user_id: userId,
@@ -57,7 +131,12 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       uploaded_at: new Date(),
     });
 
-    res.json({ success: true, record });
+    res.json({ 
+      success: true, 
+      record,
+      message: `Successfully processed ${rows.length} contacts from ${req.file.originalname}`,
+      sample_data: rows.slice(0, 3) // Show first 3 rows as sample
+    });
   } catch (err) {
     logger.error('Excel upload failed', { error: err.message });
     res.status(500).json({ error: err.message });

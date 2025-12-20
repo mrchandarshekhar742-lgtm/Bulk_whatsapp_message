@@ -1,12 +1,20 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { MdRefresh, MdFilterList } from 'react-icons/md';
+import { MdRefresh, MdFilterList, MdSend, MdError, MdSchedule, MdCheckCircle } from 'react-icons/md';
 import DashboardLayout from '../components/DashboardLayout';
 import api from '../api/client';
 
 export default function CampaignLogsPage() {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    total_queued: 0,
+    total_sent: 0,
+    total_failed: 0,
+    total_delivered: 0,
+    devices_online: 0,
+    devices_total: 0,
+  });
   const [filters, setFilters] = useState({
     status: '',
     device_id: '',
@@ -15,12 +23,26 @@ export default function CampaignLogsPage() {
   const [devices, setDevices] = useState([]);
   const [excelFiles, setExcelFiles] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0 });
+  const [autoRefresh, setAutoRefresh] = useState(true);
 
   useEffect(() => {
     fetchLogs();
     fetchDevices();
     fetchExcelFiles();
+    fetchStats();
   }, [filters, pagination.page]);
+
+  // Auto-refresh every 10 seconds
+  useEffect(() => {
+    if (!autoRefresh) return;
+    
+    const interval = setInterval(() => {
+      fetchLogs();
+      fetchStats();
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [autoRefresh, filters, pagination.page]);
 
   const fetchLogs = async () => {
     setLoading(true);
@@ -59,6 +81,20 @@ export default function CampaignLogsPage() {
     }
   };
 
+  const fetchStats = async () => {
+    try {
+      const response = await api.get('/api/campaigns/stats');
+      setStats(response.data.stats);
+    } catch (error) {
+      console.error('Error fetching stats:', error);
+    }
+  };
+
+  const handleRefresh = () => {
+    fetchLogs();
+    fetchStats();
+  };
+
   const getStatusColor = (status) => {
     const colors = {
       QUEUED: 'bg-yellow-100 text-yellow-700 border-yellow-200',
@@ -76,16 +112,124 @@ export default function CampaignLogsPage() {
 
   return (
     <DashboardLayout title="Campaign Logs">
-      {/* Header Actions */}
-      <div className="flex justify-between items-center mb-6">
-        <p className="text-gray-600">View all message sending logs</p>
-        <button
-          onClick={fetchLogs}
-          className="px-3 sm:px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 flex items-center gap-2 transition-colors"
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mb-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white rounded-xl p-3 sm:p-4 shadow-sm border border-gray-200"
         >
-          <MdRefresh className="text-lg" />
-          <span className="hidden sm:inline text-sm font-medium">Refresh</span>
-        </button>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <MdSchedule className="text-blue-600 text-lg sm:text-xl" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs sm:text-sm text-gray-600">Queued</p>
+              <p className="text-lg sm:text-xl font-bold text-gray-900">{stats.total_queued}</p>
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="bg-white rounded-xl p-3 sm:p-4 shadow-sm border border-gray-200"
+        >
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="p-2 bg-green-100 rounded-lg">
+              <MdSend className="text-green-600 text-lg sm:text-xl" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs sm:text-sm text-gray-600">Sent</p>
+              <p className="text-lg sm:text-xl font-bold text-gray-900">{stats.total_sent}</p>
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="bg-white rounded-xl p-3 sm:p-4 shadow-sm border border-gray-200"
+        >
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="p-2 bg-red-100 rounded-lg">
+              <MdError className="text-red-600 text-lg sm:text-xl" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs sm:text-sm text-gray-600">Failed</p>
+              <p className="text-lg sm:text-xl font-bold text-gray-900">{stats.total_failed}</p>
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="bg-white rounded-xl p-3 sm:p-4 shadow-sm border border-gray-200"
+        >
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="p-2 bg-purple-100 rounded-lg">
+              <MdCheckCircle className="text-purple-600 text-lg sm:text-xl" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs sm:text-sm text-gray-600">Success Rate</p>
+              <p className="text-lg sm:text-xl font-bold text-gray-900">
+                {stats.total_sent + stats.total_failed > 0 
+                  ? Math.round((stats.total_sent / (stats.total_sent + stats.total_failed)) * 100)
+                  : 0}%
+              </p>
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="bg-white rounded-xl p-3 sm:p-4 shadow-sm border border-gray-200"
+        >
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="p-2 bg-indigo-100 rounded-lg">
+              <MdCheckCircle className="text-indigo-600 text-lg sm:text-xl" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs sm:text-sm text-gray-600">Devices Online</p>
+              <p className="text-lg sm:text-xl font-bold text-gray-900">{stats.devices_online}/{stats.devices_total}</p>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* Header Actions */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
+        <div>
+          <p className="text-gray-600 text-sm sm:text-base">View all message sending logs</p>
+          <p className="text-xs text-gray-500 mt-1">
+            Auto-refresh: {autoRefresh ? 'ON' : 'OFF'} • Updates every 10 seconds
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setAutoRefresh(!autoRefresh)}
+            className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              autoRefresh 
+                ? 'bg-green-100 text-green-700 hover:bg-green-200' 
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            Auto-refresh {autoRefresh ? 'ON' : 'OFF'}
+          </button>
+          <button
+            onClick={handleRefresh}
+            className="px-3 sm:px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center gap-2 transition-colors"
+          >
+            <MdRefresh className="text-lg" />
+            <span className="hidden sm:inline text-sm font-medium">Refresh</span>
+          </button>
+        </div>
       </div>
 
       {/* Filters */}

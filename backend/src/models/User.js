@@ -27,9 +27,7 @@ const User = sequelize.define(
       type: DataTypes.STRING(255),
       allowNull: false,
       unique: true,
-      validate: {
-        isEmail: true,
-      },
+      validate: { isEmail: true },
     },
     phone: {
       type: DataTypes.STRING(20),
@@ -48,7 +46,6 @@ const User = sequelize.define(
       type: DataTypes.STRING(100),
       unique: true,
     },
-
     is_active: {
       type: DataTypes.BOOLEAN,
       defaultValue: true,
@@ -71,21 +68,13 @@ const User = sequelize.define(
     locked_until: {
       type: DataTypes.DATE,
     },
-    createdAt: {
-      type: DataTypes.DATE,
-      defaultValue: DataTypes.NOW,
-    },
-    updatedAt: {
-      type: DataTypes.DATE,
-      defaultValue: DataTypes.NOW,
-    },
-    deletedAt: {
-      type: DataTypes.DATE,
-    },
   },
   {
     tableName: 'users',
     timestamps: true,
+    createdAt: 'created_at',
+    updatedAt: 'updated_at',
+    deletedAt: 'deleted_at',
     paranoid: false,
   }
 );
@@ -103,7 +92,6 @@ User.beforeUpdate(async (user) => {
   }
 });
 
-// Method to verify password
 User.prototype.verifyPassword = async function (password) {
   return bcrypt.compare(password, this.password_hash);
 };

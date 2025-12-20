@@ -34,7 +34,7 @@ object PrefsHelper {
     }
     
     fun getServerUrl(context: Context): String {
-        return getPrefs(context).getString(KEY_SERVER_URL, "ws://192.168.1.100:5000/ws/device") ?: "ws://192.168.1.100:5000/ws/device"
+        return getPrefs(context).getString(KEY_SERVER_URL, "ws://66.116.196.226:5000/ws/device") ?: "ws://66.116.196.226:5000/ws/device"
     }
     
     // Auto Start

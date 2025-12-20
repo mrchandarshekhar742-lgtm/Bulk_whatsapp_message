@@ -17,7 +17,9 @@ class WhatsAppAccessibilityService : AccessibilityService() {
                 AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
                     // Check if we're in chat window and auto-send
                     scope.launch {
-                        delay(1000) // Wait for UI to load
+                        // Generate random delay between 800-2000ms
+                        val randomDelay = (800..2000).random()
+                        delay(randomDelay.toLong())
                         autoClickSendButton()
                     }
                 }

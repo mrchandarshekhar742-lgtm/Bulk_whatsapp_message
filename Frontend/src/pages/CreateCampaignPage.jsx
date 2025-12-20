@@ -18,7 +18,6 @@ export default function CreateCampaignPage() {
     excel_record_id: '',
     message_template: '',
     device_ids: [],
-    rotation_mode: 'WARMUP_AWARE',
   });
 
   useEffect(() => {
@@ -71,6 +70,8 @@ export default function CreateCampaignPage() {
       return;
     }
 
+
+
     setLoading(true);
     try {
       let response;
@@ -88,14 +89,22 @@ export default function CreateCampaignPage() {
           phone_numbers: numbers,
           message: formData.message_template,
           device_ids: formData.device_ids,
-          rotation_mode: formData.rotation_mode,
+          rotation_mode: 'SMART_ROTATION',
         });
+
       } else {
         // Send Excel campaign
-        response = await api.post('/api/campaigns', formData);
+        response = await api.post('/api/campaigns', {
+          ...formData,
+          rotation_mode: 'SMART_ROTATION',
+        });
       }
       
-      alert(response.data.message);
+      // Show success message with details
+      const successMsg = `✅ Campaign Created Successfully!\n\n${response.data.message}\n\nRedirecting to Campaign Logs...`;
+      alert(successMsg);
+      
+      // Redirect to logs page immediately for better UX
       navigate('/logs');
     } catch (error) {
       console.error('Error creating campaign:', error);
@@ -209,19 +218,23 @@ export default function CreateCampaignPage() {
                 value={manualNumbers}
                 onChange={(e) => setManualNumbers(e.target.value)}
                 className="w-full px-4 py-3 bg-gray-50 text-gray-900 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all h-40 sm:h-48 font-mono text-xs sm:text-sm"
-                placeholder="+919876543210&#10;+919876543211&#10;+919876543212&#10;..."
+                placeholder="+919876543210&#10;+919876543211&#10;+919876543212&#10;&#10;💡 For multiple messages to same number:&#10;+919876543210&#10;+919876543210&#10;+919876543210"
                 required={inputMode === 'manual'}
               />
               <div className="mt-2 text-xs sm:text-sm text-gray-600">
                 💡 Enter one phone number per line (with country code)
+                <br />
+                🔄 <strong>For multiple messages to same number:</strong> Repeat the number on multiple lines
                 {manualNumberCount > 0 && (
                   <span className="ml-2 text-primary-600 font-medium">
-                    • {manualNumberCount} numbers entered
+                    • {manualNumberCount} messages will be sent
                   </span>
                 )}
               </div>
             </div>
           )}
+
+
 
           {/* Message Template */}
           <div className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-200">
@@ -315,26 +328,7 @@ export default function CreateCampaignPage() {
             )}
           </div>
 
-          {/* Rotation Mode */}
-          <div className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-200">
-            <label className="block text-gray-900 font-semibold mb-2 text-sm sm:text-base">Rotation Mode</label>
-            <select
-              value={formData.rotation_mode}
-              onChange={(e) => setFormData({ ...formData, rotation_mode: e.target.value })}
-              className="w-full px-4 py-2.5 sm:py-3 bg-gray-50 text-gray-900 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
-            >
-              <option value="WARMUP_AWARE">Warmup Aware (Recommended)</option>
-              <option value="ROUND_ROBIN">Round Robin</option>
-              <option value="LEAST_USED">Least Used</option>
-              <option value="RANDOM">Random</option>
-            </select>
-            <div className="mt-2 text-xs sm:text-sm text-gray-600">
-              {formData.rotation_mode === 'WARMUP_AWARE' && '🎯 Prioritizes devices with higher warmup stages and more capacity'}
-              {formData.rotation_mode === 'ROUND_ROBIN' && '🔄 Distributes messages evenly across all devices'}
-              {formData.rotation_mode === 'LEAST_USED' && '📊 Sends to device with least messages sent today'}
-              {formData.rotation_mode === 'RANDOM' && '🎲 Randomly selects device for each message'}
-            </div>
-          </div>
+
 
           {/* Submit */}
           <div className="flex flex-col sm:flex-row gap-3 pt-2">

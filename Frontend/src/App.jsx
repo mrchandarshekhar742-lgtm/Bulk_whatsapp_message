@@ -5,12 +5,14 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 // Pages
 import LoginPage from './pages/LoginPage';
 import Dashboard from './pages/Dashboard';
+import DashboardPage from './pages/DashboardPage';
 import CampaignsPage from './pages/CampaignsPage';
 import ProfilePage from './pages/ProfilePage';
 import ExcelPage from './pages/ExcelPage';
 import DevicesPage from './pages/DevicesPage';
 import CreateCampaignPage from './pages/CreateCampaignPage';
 import CampaignLogsPage from './pages/CampaignLogsPage';
+import TemplatesPage from './pages/TemplatesPage';
 
 export default function App() {
   return (
@@ -26,7 +28,7 @@ export default function App() {
             path="/dashboard"
             element={
               <ProtectedRoute>
-                <Dashboard />
+                <DashboardPage />
               </ProtectedRoute>
             }
           />
@@ -75,6 +77,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <CampaignLogsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/templates"
+            element={
+              <ProtectedRoute>
+                <TemplatesPage />
               </ProtectedRoute>
             }
           />
