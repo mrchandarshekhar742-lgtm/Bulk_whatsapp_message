@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Create axios instance with default config
 export const apiClient = axios.create({
-  baseURL: 'http://66.116.196.226:5000',
+  baseURL: 'http://wxon.in',
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',

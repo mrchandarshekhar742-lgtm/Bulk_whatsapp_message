@@ -35,13 +35,13 @@ export default function TemplatesPage() {
 
   const fetchTemplates = async () => {
     try {
-      // Mock data for now - you can implement backend API
-      const mockTemplates = [
+      // Load sample templates immediately
+      const sampleTemplates = [
         {
           id: 1,
           name: 'Welcome Message',
           category: 'Marketing',
-          content: 'Hello {{name}}! Welcome to our service. We are excited to have you on board!',
+          content: 'Hello {{name}}! Welcome to our service. We are excited to have you on board! Your account is now active and ready to use.',
           variables: ['name'],
           created_at: new Date().toISOString(),
           usage_count: 15
@@ -50,7 +50,7 @@ export default function TemplatesPage() {
           id: 2,
           name: 'Order Confirmation',
           category: 'Notification',
-          content: 'Hi {{name}}, your order #{{order_id}} has been confirmed. Total amount: {{amount}}. Expected delivery: {{delivery_date}}.',
+          content: 'Hi {{name}}, your order #{{order_id}} has been confirmed. Total amount: {{amount}}. Expected delivery: {{delivery_date}}. Thank you for your purchase!',
           variables: ['name', 'order_id', 'amount', 'delivery_date'],
           created_at: new Date().toISOString(),
           usage_count: 8
@@ -59,16 +59,44 @@ export default function TemplatesPage() {
           id: 3,
           name: 'Special Offer',
           category: 'Promotion',
-          content: 'Exclusive offer for {{name}}! Get {{discount}}% off on your next purchase. Use code: {{code}}. Valid till {{expiry}}.',
+          content: 'Exclusive offer for {{name}}! Get {{discount}}% off on your next purchase. Use code: {{code}}. Valid till {{expiry}}. Don\'t miss out!',
           variables: ['name', 'discount', 'code', 'expiry'],
           created_at: new Date().toISOString(),
           usage_count: 23
+        },
+        {
+          id: 4,
+          name: 'Payment Reminder',
+          category: 'Support',
+          content: 'Dear {{name}}, this is a friendly reminder that your payment of {{amount}} is due on {{due_date}}. Please make the payment to avoid any inconvenience.',
+          variables: ['name', 'amount', 'due_date'],
+          created_at: new Date().toISOString(),
+          usage_count: 12
+        },
+        {
+          id: 5,
+          name: 'Appointment Confirmation',
+          category: 'Notification',
+          content: 'Hello {{name}}, your appointment is confirmed for {{date}} at {{time}}. Location: {{location}}. Please arrive 10 minutes early.',
+          variables: ['name', 'date', 'time', 'location'],
+          created_at: new Date().toISOString(),
+          usage_count: 6
+        },
+        {
+          id: 6,
+          name: 'Birthday Wishes',
+          category: 'Marketing',
+          content: 'Happy Birthday {{name}}! 🎉 As a special gift, enjoy {{discount}}% off on your next purchase. Use code: {{code}}. Have a wonderful day!',
+          variables: ['name', 'discount', 'code'],
+          created_at: new Date().toISOString(),
+          usage_count: 31
         }
       ];
-      setTemplates(mockTemplates);
+      
+      setTemplates(sampleTemplates);
+      setLoading(false);
     } catch (error) {
-      console.error('Error fetching templates:', error);
-    } finally {
+      console.error('Error loading templates:', error);
       setLoading(false);
     }
   };
@@ -148,12 +176,16 @@ export default function TemplatesPage() {
     let preview = content;
     const defaultSamples = {
       name: 'John Doe',
-      order_id: '12345',
-      amount: '$99.99',
-      delivery_date: '2024-01-15',
+      order_id: 'ORD-12345',
+      amount: '₹999',
+      delivery_date: '25 Dec 2024',
       discount: '20',
       code: 'SAVE20',
-      expiry: '2024-01-31'
+      expiry: '31 Dec 2024',
+      due_date: '30 Dec 2024',
+      date: '25 Dec 2024',
+      time: '2:00 PM',
+      location: 'Office Building, Mumbai'
     };
     
     const samples = { ...defaultSamples, ...sampleData };

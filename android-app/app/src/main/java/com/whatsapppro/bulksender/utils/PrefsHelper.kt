@@ -34,7 +34,15 @@ object PrefsHelper {
     }
     
     fun getServerUrl(context: Context): String {
-        return getPrefs(context).getString(KEY_SERVER_URL, "ws://66.116.196.226:5000/ws/device") ?: "ws://66.116.196.226:5000/ws/device"
+        val defaultUrl = "wss://www.wxon.in/ws/device"
+        val savedUrl = getPrefs(context).getString(KEY_SERVER_URL, defaultUrl) ?: defaultUrl
+
+        // Force the URL to be in the correct, secure format
+        return if (savedUrl.startsWith("ws://") || !savedUrl.contains("www.")) {
+            savedUrl.replace("ws://", "wss://").replace("wxon.in", "www.wxon.in")
+        } else {
+            savedUrl
+        }
     }
     
     // Auto Start

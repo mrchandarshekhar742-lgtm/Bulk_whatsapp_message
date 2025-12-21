@@ -42,7 +42,7 @@ class WebSocketManager(
         _connectionState.value = ConnectionState.CONNECTING
         
         val url = "$serverUrl?token=$deviceToken"
-        Log.d(TAG, "Attempting to connect to: $url")
+        Log.d(TAG, "Final WebSocket URL: $url")
         val request = Request.Builder()
             .url(url)
             .build()

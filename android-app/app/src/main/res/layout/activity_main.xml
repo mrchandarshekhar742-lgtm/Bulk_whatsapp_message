@@ -7,27 +7,24 @@
     android:layout_height="match_parent"
     tools:context=".ui.MainActivity">
 
-    <!-- Toolbar removed to fix ActionBar conflict -->
-    <LinearLayout
+    <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="?attr/colorPrimary"
-        android:padding="16dp"
-        android:orientation="vertical">
+        android:layout_height="wrap_content">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="WhatsApp Bulk Sender"
-            android:textColor="@color/white"
-            android:textSize="20sp"
-            android:textStyle="bold" />
+        <androidx.appcompat.widget.Toolbar
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            android:background="?attr/colorPrimary"
+            app:popupTheme="@style/ThemeOverlay.AppCompat.Light"
+            app:title="WhatsApp Bulk Sender" />
 
-    </LinearLayout>
+    </com.google.android.material.appbar.AppBarLayout>
 
     <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="match_parent"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -115,13 +112,15 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
-                        android:hint="Server URL">
+                        android:hint="@string/server_url_hint">
 
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/etServerUrl"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:inputType="textUri"
+                            android:text="@string/default_server_url"
+                            android:hint="@string/domain_example"
                             android:maxLines="1" />
 
                     </com.google.android.material.textfield.TextInputLayout>

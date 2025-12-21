@@ -41,7 +41,7 @@ export function Sidebar() {
 
       {/* Sidebar */}
       <aside
-        className={`w-64 bg-gradient-to-b from-secondary-800 via-secondary-850 to-secondary-900 text-white fixed h-screen left-0 top-0 overflow-y-auto z-[55] shadow-xl transition-transform duration-300 ${
+        className={`w-64 bg-gradient-to-b from-secondary-800 via-secondary-850 to-secondary-900 text-white fixed h-screen left-0 top-0 overflow-y-auto z-[70] shadow-xl transition-transform duration-300 ${
           isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
@@ -113,7 +113,7 @@ export function Sidebar() {
       {/* Mobile Menu Toggle Button */}
       <button
         onClick={() => setIsMobileOpen(true)}
-        className="fixed top-4 left-4 lg:hidden z-[60] p-3 bg-primary-600 text-white rounded-lg shadow-lg hover:bg-primary-700 transition-all duration-200"
+        className="fixed top-4 left-4 lg:hidden z-[75] p-3 bg-primary-600 text-white rounded-lg shadow-lg hover:bg-primary-700 transition-all duration-200"
       >
         <MdMenu className="text-xl" />
       </button>

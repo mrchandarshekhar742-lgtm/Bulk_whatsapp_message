@@ -1,93 +1,83 @@
 package com.whatsapppro.bulksender.service
 
 import android.accessibilityservice.AccessibilityService
+import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
-import android.util.Log
 import kotlinx.coroutines.*
 
 class WhatsAppAccessibilityService : AccessibilityService() {
-    
+
     private val tag = "WhatsAppAccessibility"
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-    
+    private var lastClickTime = 0L
+
+    companion object {
+        // Cooldown period in milliseconds to prevent rapid-fire clicks
+        private const val CLICK_COOLDOWN = 2000L 
+    }
+
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event?.packageName == "com.whatsapp") {
-            when (event.eventType) {
-                AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
-                    // Check if we're in chat window and auto-send
-                    scope.launch {
-                        // Generate random delay between 800-2000ms
-                        val randomDelay = (800..2000).random()
-                        delay(randomDelay.toLong())
-                        autoClickSendButton()
-                    }
+        if (event?.packageName != "com.whatsapp") return
+
+        // We are only interested in content changes, as they indicate the UI has been updated
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
+            // Debounce the click event to avoid multiple clicks for a single UI update
+            val currentTime = System.currentTimeMillis()
+            if (currentTime - lastClickTime < CLICK_COOLDOWN) {
+                return // Still in cooldown
+            }
+
+            scope.launch {
+                // A short, random delay to make the interaction seem more human
+                val randomDelay = (500..1500).random()
+                delay(randomDelay.toLong())
+
+                val rootNode = rootInActiveWindow ?: return@launch
+                val sendButton = findSendButton(rootNode)
+
+                if (sendButton != null && sendButton.isClickable) {
+                    sendButton.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                    lastClickTime = System.currentTimeMillis() // Update the last click time
+                    Log.d(tag, "Send button clicked automatically.")
+                } else {
+                    // This log is now less important, as it will fire often.
+                    // Log.d(tag, "Send button not found or not clickable this time.")
                 }
+                rootNode.recycle()
             }
         }
     }
-    
-    private fun autoClickSendButton() {
-        try {
-            val rootNode = rootInActiveWindow ?: return
-            
-            // Find send button (multiple possible IDs)
-            val sendButton = findSendButton(rootNode)
-            
-            if (sendButton != null && sendButton.isClickable) {
-                sendButton.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                Log.d(tag, "Send button clicked automatically")
-            } else {
-                Log.d(tag, "Send button not found or not clickable")
-            }
-            
-        } catch (e: Exception) {
-            Log.e(tag, "Error auto-clicking send button: ${e.message}")
-        }
-    }
-    
+
     private fun findSendButton(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
-        // Try different possible send button identifiers
+        // WhatsApp often uses the 'send' description for its button
+        val sendButton = node.findAccessibilityNodeInfosByText("Send")
+        if (sendButton.isNotEmpty() && sendButton[0] != null) {
+            return sendButton[0]
+        }
+
+        // Fallback to searching by the resource ID, which can change
         val sendButtonIds = listOf(
             "com.whatsapp:id/send",
-            "com.whatsapp:id/conversation_entry_action_button",
-            "send"
+            "com.whatsapp:id/conversation_entry_action_button"
         )
-        
         for (id in sendButtonIds) {
             val buttons = node.findAccessibilityNodeInfosByViewId(id)
             if (buttons.isNotEmpty()) {
                 return buttons[0]
             }
         }
-        
-        // Fallback: search by content description
-        return findNodeByContentDescription(node, "Send")
-    }
-    
-    private fun findNodeByContentDescription(
-        node: AccessibilityNodeInfo, 
-        description: String
-    ): AccessibilityNodeInfo? {
-        if (node.contentDescription?.contains(description, true) == true) {
-            return node
-        }
-        
-        for (i in 0 until node.childCount) {
-            val child = node.getChild(i) ?: continue
-            val result = findNodeByContentDescription(child, description)
-            if (result != null) return result
-        }
-        
+
         return null
     }
-    
+
     override fun onInterrupt() {
-        Log.d(tag, "Accessibility service interrupted")
+        Log.d(tag, "Accessibility service was interrupted.")
     }
-    
+
     override fun onDestroy() {
         super.onDestroy()
         scope.cancel()
+        Log.d(tag, "Accessibility service destroyed.")
     }
 }

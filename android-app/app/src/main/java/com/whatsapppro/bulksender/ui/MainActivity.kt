@@ -41,8 +41,7 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         
-        // Skip toolbar setup to avoid ActionBar conflict
-        // setSupportActionBar(binding.toolbar)
+        setSupportActionBar(binding.toolbar)
         
         setupUI()
         checkPermissions()
@@ -58,6 +57,8 @@ class MainActivity : AppCompatActivity() {
         
         // Load saved server URL
         binding.etServerUrl.setText(PrefsHelper.getServerUrl(this))
+        // Set hint to show domain instead of IP
+        binding.etServerUrl.hint = "wss://www.wxon.in/ws/device"
         
         // Save button
         binding.btnSave.setOnClickListener {
@@ -276,6 +277,4 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
-    
-    // Menu functions completely removed to avoid missing references
 }

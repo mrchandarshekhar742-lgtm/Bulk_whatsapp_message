@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">WhatsApp Pro Bulk Sender</string>
+    <string name="app_name">WhatsApp Pro</string>
     <string name="settings">Settings</string>
     <string name="accessibility_service_description">WhatsApp Pro Bulk Sender needs accessibility permission to automatically send messages. This service will only interact with WhatsApp to click the send button after typing messages.</string>
+    <string name="default_server_url">ws://wxon.in/ws/device</string>
+    <string name="server_url_hint">Enter WebSocket server URL</string>
+    <string name="domain_example">Example: ws://wxon.in/ws/device</string>
 </resources>
