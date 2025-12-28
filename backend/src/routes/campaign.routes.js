@@ -377,11 +377,22 @@ router.get('/logs',
         if (value === '' || value === undefined || value === null) {
           return false;
         }
+        // For numeric fields, also check if it's a valid number when not empty
+        if (['excel_record_id', 'device_id', 'page', 'limit'].includes(error.param)) {
+          const numValue = parseInt(value, 10);
+          if (isNaN(numValue)) {
+            return true; // Keep this error - invalid number
+          }
+        }
         return true;
       });
       
       if (significantErrors.length > 0) {
-        return res.status(400).json({ errors: significantErrors });
+        return res.status(400).json({ 
+          errors: significantErrors,
+          message: 'Validation failed',
+          received_params: req.query
+        });
       }
     }
     next();

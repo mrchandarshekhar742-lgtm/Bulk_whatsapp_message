@@ -50,8 +50,18 @@ export default function CampaignLogsPage() {
       const params = new URLSearchParams({
         page: pagination.page,
         limit: pagination.limit,
-        ...filters,
       });
+      
+      // Only add filters if they have actual values (not empty strings)
+      if (filters.status && filters.status.trim() !== '') {
+        params.append('status', filters.status);
+      }
+      if (filters.device_id && filters.device_id.trim() !== '') {
+        params.append('device_id', filters.device_id);
+      }
+      if (filters.excel_record_id && filters.excel_record_id.trim() !== '') {
+        params.append('excel_record_id', filters.excel_record_id);
+      }
       
       const response = await api.get(`/api/campaigns/logs?${params}`);
       setLogs(response.data.logs);
