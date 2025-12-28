@@ -15,7 +15,6 @@ export function Sidebar() {
     { icon: MdSend, label: 'Create Campaign', path: '/create-campaign' },
     { icon: MdHistory, label: 'Campaign Logs', path: '/logs' },
     { icon: MdUpload, label: 'Excel Upload', path: '/excel' },
-    { icon: MdDescription, label: 'Campaigns', path: '/campaigns' },
     { icon: MdPerson, label: 'Profile', path: '/profile' },
   ];
 

@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # ============================================================================
-# CAMPAIGN LOGS FIX DEPLOYMENT
+# COMPLETE FIX DEPLOYMENT - Templates & Campaign Logs
 # ============================================================================
 
-echo "🔧 Deploying Campaign Logs Fix..."
+echo "🔧 Deploying Complete Fixes..."
 
 # Check if we're in the right directory
 if [ ! -f "backend/package.json" ]; then
@@ -26,13 +26,20 @@ echo "✅ Backend restarted"
 # Go back to project root
 cd ..
 
-echo "🏗️  Building frontend..."
+echo "🏗️  Building frontend with cache clear..."
 cd Frontend
 
+# Clear npm cache and node_modules to ensure fresh build
+echo "🧹 Clearing cache..."
+npm cache clean --force 2>/dev/null || true
+rm -rf node_modules/.cache 2>/dev/null || true
+rm -rf dist 2>/dev/null || true
+
 # Build frontend
+echo "📦 Building frontend..."
 npm run build
 
-echo "✅ Frontend built"
+echo "✅ Frontend built with fresh cache"
 
 # Go back to project root
 cd ..
@@ -48,12 +55,14 @@ echo "Testing database endpoint..."
 curl -s http://localhost:8080/api/test/db | jq '.' || echo "Database endpoint test failed"
 
 echo ""
-echo "🎉 Campaign Logs Fix Deployed Successfully!"
+echo "🎉 Complete Fix Deployed Successfully!"
 echo ""
 echo "📋 What was fixed:"
-echo "  ✅ Frontend no longer sends empty string parameters"
-echo "  ✅ Backend validation improved for optional parameters"
-echo "  ✅ Campaign logs API should now work without 400 errors"
+echo "  ✅ Removed Templates option from sidebar completely"
+echo "  ✅ Removed redundant CampaignsPage (was duplicate of Excel)"
+echo "  ✅ Fixed campaign logs API to handle empty parameters"
+echo "  ✅ Removed all Templates routes and references"
+echo "  ✅ Cleared frontend cache for fresh build"
 echo ""
 echo "🔗 Test your website:"
 echo "  Frontend: http://wxon.in"
@@ -62,3 +71,8 @@ echo ""
 echo "📊 Check PM2 status:"
 echo "  pm2 status"
 echo "  pm2 logs whatsapp-backend --lines 20"
+echo ""
+echo "🔄 If you still see Templates in sidebar:"
+echo "  1. Hard refresh browser (Ctrl+F5 or Cmd+Shift+R)"
+echo "  2. Clear browser cache"
+echo "  3. Try incognito/private browsing mode"

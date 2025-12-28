@@ -360,73 +360,47 @@ router.post('/manual',
 // ============================================================================
 router.get('/logs',
   verifyToken,
-  [
-    query('excel_record_id').optional().isInt().withMessage('Excel record ID must be an integer'),
-    query('device_id').optional().isInt().withMessage('Device ID must be an integer'),
-    query('status').optional().isIn(['QUEUED', 'SENT', 'DELIVERED', 'FAILED', 'PENDING']).withMessage('Invalid status'),
-    query('page').optional().isInt({ min: 1 }).withMessage('Page must be a positive integer'),
-    query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100'),
-  ],
-  (req, res, next) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      // Filter out errors for empty values - allow empty strings for optional parameters
-      const significantErrors = errors.array().filter(error => {
-        const value = req.query[error.param];
-        // Allow empty strings, null, undefined for optional parameters
-        if (value === '' || value === undefined || value === null) {
-          return false;
-        }
-        // For numeric fields, also check if it's a valid number when not empty
-        if (['excel_record_id', 'device_id', 'page', 'limit'].includes(error.param)) {
-          const numValue = parseInt(value, 10);
-          if (isNaN(numValue)) {
-            return true; // Keep this error - invalid number
-          }
-        }
-        return true;
-      });
-      
-      if (significantErrors.length > 0) {
-        return res.status(400).json({ 
-          errors: significantErrors,
-          message: 'Validation failed',
-          received_params: req.query
-        });
-      }
-    }
-    next();
-  },
   async (req, res) => {
     try {
-      const { excel_record_id, device_id, status, page = 1, limit = 20 } = req.query;
+      // Extract and validate query parameters manually to handle empty strings
+      const page = parseInt(req.query.page) || 1;
+      const limit = Math.min(parseInt(req.query.limit) || 20, 100);
       const offset = (page - 1) * limit;
 
-      // Build where clause
+      // Build where clause - only include non-empty values
       const where = {};
       
       // Only add filters if they have actual values (not empty strings)
-      if (excel_record_id && excel_record_id !== '') {
-        where.excel_record_id = parseInt(excel_record_id);
-      }
-      
-      if (device_id && device_id !== '') {
-        // Verify device belongs to user
-        const device = await Device.findOne({
-          where: { id: parseInt(device_id), user_id: req.user.id },
-        });
-        if (!device) {
-          return res.status(404).json({ error: 'Device not found' });
+      if (req.query.excel_record_id && req.query.excel_record_id.trim() !== '') {
+        const excelRecordId = parseInt(req.query.excel_record_id);
+        if (!isNaN(excelRecordId)) {
+          where.excel_record_id = excelRecordId;
         }
-        where.device_id = parseInt(device_id);
       }
       
-      if (status && status !== '') {
-        where.status = status;
+      if (req.query.device_id && req.query.device_id.trim() !== '') {
+        const deviceId = parseInt(req.query.device_id);
+        if (!isNaN(deviceId)) {
+          // Verify device belongs to user
+          const device = await Device.findOne({
+            where: { id: deviceId, user_id: req.user.id },
+          });
+          if (!device) {
+            return res.status(404).json({ error: 'Device not found' });
+          }
+          where.device_id = deviceId;
+        }
+      }
+      
+      if (req.query.status && req.query.status.trim() !== '') {
+        const validStatuses = ['QUEUED', 'SENT', 'DELIVERED', 'FAILED', 'PENDING'];
+        if (validStatuses.includes(req.query.status)) {
+          where.status = req.query.status;
+        }
       }
 
       // If no device_id specified, get all user's devices
-      if (!device_id || device_id === '') {
+      if (!req.query.device_id || req.query.device_id.trim() === '') {
         const userDevices = await Device.findAll({
           where: { user_id: req.user.id },
           attributes: ['id'],
@@ -438,8 +412,8 @@ router.get('/logs',
             logs: [],
             pagination: {
               total: 0,
-              page: parseInt(page),
-              limit: parseInt(limit),
+              page: page,
+              limit: limit,
               totalPages: 0,
             },
           });
@@ -462,7 +436,7 @@ router.get('/logs',
           },
         ],
         order: [['created_at', 'DESC']],
-        limit: parseInt(limit),
+        limit: limit,
         offset,
       });
 
@@ -471,8 +445,8 @@ router.get('/logs',
         logs,
         pagination: {
           total: count,
-          page: parseInt(page),
-          limit: parseInt(limit),
+          page: page,
+          limit: limit,
           totalPages: Math.ceil(count / limit),
         },
       });

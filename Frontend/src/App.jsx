@@ -6,7 +6,6 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import LoginPage from './pages/LoginPage';
 import Dashboard from './pages/Dashboard';
 import DashboardPage from './pages/DashboardPage';
-import CampaignsPage from './pages/CampaignsPage';
 import ProfilePage from './pages/ProfilePage';
 import ExcelPage from './pages/ExcelPage';
 import DevicesPage from './pages/DevicesPage';
@@ -28,14 +27,6 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <DashboardPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/campaigns"
-            element={
-              <ProtectedRoute>
-                <CampaignsPage />
               </ProtectedRoute>
             }
           />
