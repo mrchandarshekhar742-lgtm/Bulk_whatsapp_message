@@ -327,13 +327,27 @@ router.post('/manual',
 router.get('/logs',
   verifyToken,
   [
-    query('excel_record_id').optional().isInt(),
-    query('device_id').optional().isInt(),
-    query('status').optional().isIn(['QUEUED', 'SENT', 'DELIVERED', 'FAILED', 'PENDING']),
-    query('page').optional().isInt({ min: 1 }),
-    query('limit').optional().isInt({ min: 1, max: 100 }),
+    query('excel_record_id').optional().isInt().withMessage('Excel record ID must be an integer'),
+    query('device_id').optional().isInt().withMessage('Device ID must be an integer'),
+    query('status').optional().isIn(['QUEUED', 'SENT', 'DELIVERED', 'FAILED', 'PENDING']).withMessage('Invalid status'),
+    query('page').optional().isInt({ min: 1 }).withMessage('Page must be a positive integer'),
+    query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100'),
   ],
-  validate,
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      // Filter out errors for empty values
+      const significantErrors = errors.array().filter(error => {
+        const value = req.query[error.param];
+        return value !== '' && value !== undefined && value !== null;
+      });
+      
+      if (significantErrors.length > 0) {
+        return res.status(400).json({ errors: significantErrors });
+      }
+    }
+    next();
+  },
   async (req, res) => {
     try {
       const { excel_record_id, device_id, status, page = 1, limit = 20 } = req.query;

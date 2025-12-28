@@ -66,6 +66,19 @@ router.post('/logout', verifyToken, authController.logout);
 router.get('/me', verifyToken, authController.getCurrentUser);
 
 /**
+ * GET /api/auth/test
+ * Test endpoint to check if API is working
+ */
+router.get('/test', (req, res) => {
+  res.json({ 
+    success: true, 
+    message: 'API is working!', 
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
+/**
  * PUT /api/auth/profile
  * Update user profile
  */
