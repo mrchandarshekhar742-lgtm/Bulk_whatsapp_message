@@ -7,16 +7,31 @@ const logger = require('../utils/logger');
  */
 exports.verifyToken = async (req, res, next) => {
   try {
-    const token = req.headers.authorization?.split(' ')[1];
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader) {
+      logger.error('No authorization header provided');
+      return res.status(401).json({ error: 'No token provided' });
+    }
 
+    const token = authHeader.split(' ')[1];
+    
     if (!token) {
+      logger.error('No token in authorization header');
       return res.status(401).json({ error: 'No token provided' });
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    if (!decoded.userId) {
+      logger.error('Token missing userId');
+      return res.status(401).json({ error: 'Invalid token format' });
+    }
+
     const user = await User.findByPk(decoded.userId);
 
     if (!user) {
+      logger.error('User not found for token', { userId: decoded.userId });
       return res.status(401).json({ error: 'User not found' });
     }
 
@@ -24,10 +39,19 @@ exports.verifyToken = async (req, res, next) => {
     next();
   } catch (error) {
     if (error.name === 'TokenExpiredError') {
+      logger.error('Token expired', { error: error.message });
       return res.status(401).json({ error: 'Token expired' });
     }
-    logger.error('Token verification failed', { error: error.message });
-    res.status(401).json({ error: 'Invalid token' });
+    if (error.name === 'JsonWebTokenError') {
+      logger.error('Invalid token', { error: error.message });
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    logger.error('Token verification failed', { 
+      error: error.message, 
+      stack: error.stack,
+      headers: req.headers.authorization ? 'present' : 'missing'
+    });
+    res.status(401).json({ error: 'Authentication failed' });
   }
 };
 

@@ -23,14 +23,16 @@ class DeviceWebSocketManager {
   }
 
   async handleConnection(ws, req) {
-    const token = this.extractToken(req);
+    let deviceId = null;
     
-    if (!token) {
-      ws.close(4001, 'No token provided');
-      return;
-    }
-
     try {
+      const token = this.extractToken(req);
+      
+      if (!token) {
+        ws.close(4001, 'No token provided');
+        return;
+      }
+
       // Verify device token
       const device = await Device.findOne({ where: { device_token: token } });
       
@@ -39,7 +41,16 @@ class DeviceWebSocketManager {
         return;
       }
 
-      const deviceId = device.id;
+      deviceId = device.id;
+      
+      // Check if device is already connected
+      if (this.deviceConnections.has(deviceId)) {
+        // Close existing connection
+        const existingWs = this.deviceConnections.get(deviceId);
+        if (existingWs && existingWs.readyState === WebSocket.OPEN) {
+          existingWs.close(4003, 'New connection established');
+        }
+      }
       
       // Store connection
       this.deviceConnections.set(deviceId, ws);
@@ -66,16 +77,29 @@ class DeviceWebSocketManager {
 
       // Handle messages from device
       ws.on('message', async (data) => {
-        await this.handleDeviceMessage(deviceId, data);
+        try {
+          await this.handleDeviceMessage(deviceId, data);
+        } catch (error) {
+          logger.error(`Error handling message from device ${deviceId}:`, error);
+        }
       });
 
       // Handle disconnection
-      ws.on('close', async () => {
-        await this.handleDisconnection(deviceId);
+      ws.on('close', async (code, reason) => {
+        try {
+          await this.handleDisconnection(deviceId);
+        } catch (error) {
+          logger.error(`Error handling disconnection for device ${deviceId}:`, error);
+        }
       });
 
       ws.on('error', (error) => {
         logger.error(`WebSocket error for device ${deviceId}:`, error);
+        try {
+          this.handleDisconnection(deviceId);
+        } catch (cleanupError) {
+          logger.error(`Error during cleanup for device ${deviceId}:`, cleanupError);
+        }
       });
 
       // Heartbeat
@@ -86,7 +110,16 @@ class DeviceWebSocketManager {
 
     } catch (error) {
       logger.error('Device connection error:', error);
-      ws.close(4003, 'Server error');
+      if (deviceId) {
+        try {
+          await this.handleDisconnection(deviceId);
+        } catch (cleanupError) {
+          logger.error(`Error during cleanup for device ${deviceId}:`, cleanupError);
+        }
+      }
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.close(4003, 'Server error');
+      }
     }
   }
 

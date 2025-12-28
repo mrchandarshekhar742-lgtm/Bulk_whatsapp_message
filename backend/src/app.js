@@ -29,6 +29,10 @@ app.use(helmet());
 const allowedOrigins = [
   'https://wxon.in',
   'https://www.wxon.in',
+  'http://wxon.in',
+  'http://www.wxon.in',
+  'http://wxon.in:8080',
+  'http://www.wxon.in:8080',
   'http://localhost:5173',
   'http://localhost:5174',
 ];
@@ -95,12 +99,63 @@ app.use((req, res, next) => {
 /* ============================================================================
    ROUTES
 ============================================================================ */
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    environment: process.env.NODE_ENV,
-    timestamp: new Date().toISOString(),
-  });
+app.get('/health', async (req, res) => {
+  try {
+    // Test database connection
+    const { sequelize } = require('./models');
+    await sequelize.authenticate();
+    
+    res.json({
+      status: 'ok',
+      environment: process.env.NODE_ENV,
+      timestamp: new Date().toISOString(),
+      database: 'connected',
+      port: process.env.APP_PORT || 5000,
+    });
+  } catch (error) {
+    logger.error('Health check failed', { error: error.message });
+    res.status(503).json({
+      status: 'error',
+      environment: process.env.NODE_ENV,
+      timestamp: new Date().toISOString(),
+      database: 'disconnected',
+      error: error.message,
+    });
+  }
+});
+
+// Database test endpoint
+app.get('/api/test/db', async (req, res) => {
+  try {
+    const { sequelize, User, Device, ExcelRecord } = require('./models');
+    
+    // Test connection
+    await sequelize.authenticate();
+    
+    // Test table access
+    const userCount = await User.count();
+    const deviceCount = await Device.count();
+    const excelCount = await ExcelRecord.count();
+    
+    res.json({
+      success: true,
+      database: 'connected',
+      tables: {
+        users: userCount,
+        devices: deviceCount,
+        excel_records: excelCount,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.error('Database test failed', { error: error.message });
+    res.status(503).json({
+      success: false,
+      database: 'error',
+      error: error.message,
+      timestamp: new Date().toISOString(),
+    });
+  }
 });
 
 app.use('/api/auth', authRoutes);

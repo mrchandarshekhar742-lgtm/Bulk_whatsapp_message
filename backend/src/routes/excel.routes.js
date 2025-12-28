@@ -146,7 +146,17 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 // GET /api/excel
 router.get('/', async (req, res) => {
   try {
+    // Check if user is authenticated
+    if (!req.user || !req.user.id) {
+      logger.error('Excel GET: User not authenticated', { 
+        user: req.user ? 'partial' : 'null',
+        headers: req.headers.authorization ? 'present' : 'missing'
+      });
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
     const userId = req.user.id;
+    logger.info('Excel GET: Fetching records', { userId });
     
     // Check if ExcelRecord table exists, if not return empty array
     try {
@@ -154,15 +164,42 @@ router.get('/', async (req, res) => {
         where: { user_id: userId }, 
         order: [['uploaded_at', 'DESC']] 
       });
+      
+      logger.info('Excel GET: Success', { userId, count: records.length });
       res.json({ success: true, records });
     } catch (dbError) {
       // If table doesn't exist or other DB error, return empty array
-      logger.error('Excel table access failed', { error: dbError.message });
+      logger.error('Excel table access failed', { 
+        error: dbError.message, 
+        userId: userId,
+        stack: dbError.stack,
+        name: dbError.name
+      });
+      
+      // Check if it's a connection error
+      if (dbError.name === 'SequelizeConnectionError' || 
+          dbError.name === 'SequelizeConnectionRefusedError' ||
+          dbError.name === 'SequelizeHostNotFoundError') {
+        return res.status(503).json({ 
+          error: 'Database connection failed',
+          details: 'Please check database configuration'
+        });
+      }
+      
+      // For other DB errors, return empty array to prevent frontend crashes
       res.json({ success: true, records: [] });
     }
   } catch (err) {
-    logger.error('Get excel list failed', { error: err.message });
-    res.status(500).json({ error: 'Failed to fetch Excel records' });
+    logger.error('Get excel list failed', { 
+      error: err.message, 
+      stack: err.stack,
+      user: req.user ? req.user.id : 'undefined',
+      name: err.name
+    });
+    res.status(500).json({ 
+      error: 'Failed to fetch Excel records',
+      details: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
+    });
   }
 });
 

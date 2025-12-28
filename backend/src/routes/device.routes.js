@@ -5,6 +5,7 @@ const { Device, DeviceLog, DeviceCommand } = require('../models');
 const { verifyToken } = require('../middleware/auth');
 const DeviceWebSocketManager = require('../services/DeviceWebSocketManager');
 const DeviceRotationEngine = require('../services/DeviceRotationEngine');
+const { sanitizeDeviceLabel, sanitizePhoneNumber, sanitizeMessage } = require('../utils/sanitizer');
 const crypto = require('crypto');
 const { Op } = require('sequelize');
 
@@ -77,13 +78,21 @@ router.post('/',
     try {
       const { device_label, phone_number } = req.body;
 
+      // Sanitize inputs
+      const sanitizedLabel = sanitizeDeviceLabel(device_label);
+      const sanitizedPhone = phone_number ? sanitizePhoneNumber(phone_number) : null;
+      
+      if (!sanitizedLabel) {
+        return res.status(400).json({ error: 'Invalid device label' });
+      }
+
       // Generate unique device token
       const device_token = crypto.randomBytes(32).toString('hex');
 
       const device = await Device.create({
         user_id: req.user.id,
-        device_label,
-        phone_number,
+        device_label: sanitizedLabel,
+        phone_number: sanitizedPhone,
         device_token,
         warmup_started_at: new Date(), // Start warmup immediately
       });
@@ -185,11 +194,16 @@ router.put('/:id',
 
       const { device_label, phone_number, is_active } = req.body;
 
-      await device.update({
-        ...(device_label && { device_label }),
-        ...(phone_number && { phone_number }),
-        ...(is_active !== undefined && { is_active }),
-      });
+      // Sanitize inputs
+      const sanitizedLabel = device_label ? sanitizeDeviceLabel(device_label) : null;
+      const sanitizedPhone = phone_number ? sanitizePhoneNumber(phone_number) : null;
+
+      const updateData = {};
+      if (sanitizedLabel) updateData.device_label = sanitizedLabel;
+      if (sanitizedPhone) updateData.phone_number = sanitizedPhone;
+      if (is_active !== undefined) updateData.is_active = is_active;
+
+      await device.update(updateData);
 
       res.json({
         success: true,
@@ -406,13 +420,21 @@ router.post('/:id/test',
 
       const { recipient_number, message } = req.body;
 
+      // Sanitize inputs
+      const sanitizedPhone = sanitizePhoneNumber(recipient_number);
+      const sanitizedMessage = sanitizeMessage(message);
+      
+      if (!sanitizedPhone || !sanitizedMessage) {
+        return res.status(400).json({ error: 'Invalid phone number or message' });
+      }
+
       // Create command
       const command = await DeviceCommand.create({
         device_id: device.id,
         command_type: 'SEND_MESSAGE',
         payload: {
-          recipient_number,
-          message,
+          recipient_number: sanitizedPhone,
+          message: sanitizedMessage,
         },
         priority: 1, // High priority for test
       });
@@ -427,8 +449,8 @@ router.post('/:id/test',
       // Create log entry
       await DeviceLog.create({
         device_id: device.id,
-        recipient_number,
-        message_content: message,
+        recipient_number: sanitizedPhone,
+        message_content: sanitizedMessage,
         status: 'QUEUED',
       });
 

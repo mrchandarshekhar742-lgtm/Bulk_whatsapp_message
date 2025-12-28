@@ -1,11 +1,24 @@
 const express = require('express');
 const router = express.Router();
+const rateLimit = require('express-rate-limit');
 const { body, param, query, validationResult } = require('express-validator');
 const { Device, DeviceLog, DeviceCommand, ExcelRecord } = require('../models');
 const { verifyToken } = require('../middleware/auth');
 const DeviceWebSocketManager = require('../services/DeviceWebSocketManager');
 const DeviceRotationEngine = require('../services/DeviceRotationEngine');
+const { sanitizeMessage, sanitizePhoneNumber, sanitizeName } = require('../utils/sanitizer');
 const { Op } = require('sequelize');
+
+// Rate limiting for campaign creation
+const campaignCreateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // Limit each user to 10 campaign creations per windowMs
+  message: {
+    error: 'Too many campaigns created, please try again later.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Validation middleware
 const validate = (req, res, next) => {
@@ -20,6 +33,7 @@ const validate = (req, res, next) => {
 // 1. CREATE CAMPAIGN (Device-Based)
 // ============================================================================
 router.post('/',
+  campaignCreateLimiter,
   verifyToken,
   [
     body('name').notEmpty().withMessage('Campaign name is required'),
@@ -32,6 +46,14 @@ router.post('/',
   async (req, res) => {
     try {
       const { name, excel_record_id, message_template, device_ids, rotation_mode = 'SMART_ROTATION' } = req.body;
+
+      // Sanitize inputs
+      const sanitizedName = sanitizeName(name);
+      const sanitizedMessage = sanitizeMessage(message_template);
+      
+      if (!sanitizedName || !sanitizedMessage) {
+        return res.status(400).json({ error: 'Invalid campaign name or message content' });
+      }
 
       // Verify Excel record belongs to user
       const excelRecord = await ExcelRecord.findOne({
@@ -75,9 +97,9 @@ router.post('/',
       // Create campaign record (simplified - you can expand this)
       const campaign = {
         id: Date.now(), // Temporary ID
-        name,
+        name: sanitizedName, // Use sanitized name
         excel_record_id,
-        message_template,
+        message_template: sanitizedMessage, // Use sanitized message
         device_ids,
         rotation_mode,
         total_recipients: recipients.length,
@@ -96,16 +118,17 @@ router.post('/',
         const deviceId = await DeviceRotationEngine.selectDevice(device_ids, rotation_mode);
 
         // Replace variables in message template
-        let message = message_template;
+        let message = sanitizedMessage; // Use sanitized message
         Object.keys(recipient).forEach(key => {
           message = message.replace(new RegExp(`{{${key}}}`, 'g'), recipient[key] || '');
         });
 
-        // Get phone number from recipient
-        const phoneNumber = recipient.phone || recipient.Phone || recipient.number || recipient.Number;
+        // Get phone number from recipient and sanitize it
+        const rawPhoneNumber = recipient.phone || recipient.Phone || recipient.number || recipient.Number;
+        const phoneNumber = sanitizePhoneNumber(rawPhoneNumber);
 
         if (!phoneNumber) {
-          console.warn('Recipient missing phone number:', recipient);
+          console.warn('Recipient has invalid phone number:', recipient);
           continue;
         }
 
@@ -126,7 +149,7 @@ router.post('/',
           payload: {
             recipient_number: phoneNumber,
             message: message,
-            campaign_name: name,
+            campaign_name: sanitizedName, // Use sanitized name
           },
           priority: 5,
         });
@@ -186,6 +209,7 @@ router.post('/',
 // 2. CREATE MANUAL CAMPAIGN (Without Excel)
 // ============================================================================
 router.post('/manual',
+  campaignCreateLimiter,
   verifyToken,
   [
     body('name').notEmpty().withMessage('Campaign name is required'),
@@ -198,6 +222,14 @@ router.post('/manual',
   async (req, res) => {
     try {
       const { name, phone_numbers, message, device_ids, rotation_mode = 'SMART_ROTATION' } = req.body;
+
+      // Sanitize inputs
+      const sanitizedName = sanitizeName(name);
+      const sanitizedMessage = sanitizeMessage(message);
+      
+      if (!sanitizedName || !sanitizedMessage) {
+        return res.status(400).json({ error: 'Invalid campaign name or message content' });
+      }
 
       // Verify devices belong to user and are available
       const devices = await Device.findAll({
@@ -212,8 +244,10 @@ router.post('/manual',
         return res.status(400).json({ error: 'No valid devices selected' });
       }
 
-      // Validate phone numbers
-      const validNumbers = phone_numbers.filter(num => num && num.trim().length > 0);
+      // Validate and sanitize phone numbers
+      const validNumbers = phone_numbers
+        .map(num => sanitizePhoneNumber(num))
+        .filter(num => num !== null);
       
       if (validNumbers.length === 0) {
         return res.status(400).json({ error: 'No valid phone numbers provided' });
@@ -229,9 +263,9 @@ router.post('/manual',
       // Create campaign record
       const campaign = {
         id: Date.now(),
-        name,
+        name: sanitizedName, // Use sanitized name
         type: 'MANUAL',
-        message,
+        message: sanitizedMessage, // Use sanitized message
         device_ids,
         rotation_mode,
         total_recipients: validNumbers.length,
@@ -253,8 +287,8 @@ router.post('/manual',
           device_id: deviceId,
           excel_record_id: null, // Manual campaign
           excel_row_index: queuedCount,
-          recipient_number: phoneNumber.trim(),
-          message_content: message,
+          recipient_number: phoneNumber, // Already sanitized
+          message_content: sanitizedMessage, // Use sanitized message
           status: 'QUEUED',
         });
 
@@ -263,9 +297,9 @@ router.post('/manual',
           device_id: deviceId,
           command_type: 'SEND_MESSAGE',
           payload: {
-            recipient_number: phoneNumber.trim(),
-            message: message,
-            campaign_name: name,
+            recipient_number: phoneNumber, // Already sanitized
+            message: sanitizedMessage, // Use sanitized message
+            campaign_name: sanitizedName, // Use sanitized name
           },
           priority: 5,
         });
@@ -336,10 +370,14 @@ router.get('/logs',
   (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      // Filter out errors for empty values
+      // Filter out errors for empty values - allow empty strings for optional parameters
       const significantErrors = errors.array().filter(error => {
         const value = req.query[error.param];
-        return value !== '' && value !== undefined && value !== null;
+        // Allow empty strings, null, undefined for optional parameters
+        if (value === '' || value === undefined || value === null) {
+          return false;
+        }
+        return true;
       });
       
       if (significantErrors.length > 0) {
@@ -356,31 +394,46 @@ router.get('/logs',
       // Build where clause
       const where = {};
       
-      if (excel_record_id) {
-        where.excel_record_id = excel_record_id;
+      // Only add filters if they have actual values (not empty strings)
+      if (excel_record_id && excel_record_id !== '') {
+        where.excel_record_id = parseInt(excel_record_id);
       }
       
-      if (device_id) {
+      if (device_id && device_id !== '') {
         // Verify device belongs to user
         const device = await Device.findOne({
-          where: { id: device_id, user_id: req.user.id },
+          where: { id: parseInt(device_id), user_id: req.user.id },
         });
         if (!device) {
           return res.status(404).json({ error: 'Device not found' });
         }
-        where.device_id = device_id;
+        where.device_id = parseInt(device_id);
       }
       
-      if (status) {
+      if (status && status !== '') {
         where.status = status;
       }
 
       // If no device_id specified, get all user's devices
-      if (!device_id) {
+      if (!device_id || device_id === '') {
         const userDevices = await Device.findAll({
           where: { user_id: req.user.id },
           attributes: ['id'],
         });
+        
+        if (userDevices.length === 0) {
+          return res.json({
+            success: true,
+            logs: [],
+            pagination: {
+              total: 0,
+              page: parseInt(page),
+              limit: parseInt(limit),
+              totalPages: 0,
+            },
+          });
+        }
+        
         where.device_id = { [Op.in]: userDevices.map(d => d.id) };
       }
 
@@ -394,6 +447,7 @@ router.get('/logs',
           {
             model: ExcelRecord,
             attributes: ['id', 'file_name'],
+            required: false, // LEFT JOIN for manual campaigns
           },
         ],
         order: [['created_at', 'DESC']],
@@ -414,7 +468,10 @@ router.get('/logs',
 
     } catch (error) {
       console.error('Error fetching campaign logs:', error);
-      res.status(500).json({ error: 'Failed to fetch campaign logs' });
+      res.status(500).json({ 
+        error: 'Failed to fetch campaign logs',
+        details: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      });
     }
   }
 );

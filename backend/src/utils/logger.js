@@ -1,8 +1,14 @@
 const winston = require('winston');
 const path = require('path');
+const fs = require('fs');
 require('dotenv').config();
 
 const logDir = path.join(__dirname, '../../logs');
+
+// Ensure logs directory exists
+if (!fs.existsSync(logDir)) {
+  fs.mkdirSync(logDir, { recursive: true });
+}
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
