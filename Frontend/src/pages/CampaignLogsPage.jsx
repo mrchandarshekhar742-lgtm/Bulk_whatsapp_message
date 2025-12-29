@@ -32,14 +32,14 @@ export default function CampaignLogsPage() {
     fetchStats();
   }, [filters, pagination.page]);
 
-  // Auto-refresh every 10 seconds
+  // Auto-refresh every 20 seconds (reduced frequency to prevent rate limiting)
   useEffect(() => {
     if (!autoRefresh) return;
     
     const interval = setInterval(() => {
       fetchLogs();
       fetchStats();
-    }, 10000);
+    }, 20000); // Changed from 10000 to 20000 (20 seconds)
 
     return () => clearInterval(interval);
   }, [autoRefresh, filters, pagination.page]);

@@ -30,8 +30,8 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchDashboardData();
-    // Auto-refresh every 5 seconds
-    const interval = setInterval(fetchDashboardData, 5000);
+    // Auto-refresh every 15 seconds (reduced frequency to prevent rate limiting)
+    const interval = setInterval(fetchDashboardData, 15000);
     return () => clearInterval(interval);
   }, []);
 

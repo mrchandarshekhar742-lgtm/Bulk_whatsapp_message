@@ -62,7 +62,7 @@ const globalWindowMs =
   parseInt(process.env.RATE_LIMIT_WINDOW || 15, 10) * 60 * 1000;
 
 const defaultGlobalMax =
-  process.env.NODE_ENV === 'development' ? 1000 : 300;
+  process.env.NODE_ENV === 'development' ? 2000 : 1000; // Increased from 300 to 1000
 
 const globalLimiter = rateLimit({
   windowMs: globalWindowMs,
@@ -74,6 +74,12 @@ const globalLimiter = rateLimit({
   legacyHeaders: false,
   message: {
     error: 'Too many requests, please try again later.',
+  },
+  // Skip rate limiting for dashboard API calls
+  skip: (req) => {
+    // Skip for dashboard endpoints
+    const dashboardEndpoints = ['/api/campaigns/stats', '/api/devices', '/api/campaigns/logs'];
+    return dashboardEndpoints.some(endpoint => req.path.startsWith(endpoint));
   },
 });
 
