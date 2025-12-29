@@ -309,6 +309,7 @@ router.post('/manual',
         });
 
         // Send command with per-device delay management
+        // Always create the command, send immediately if device is online
         if (DeviceWebSocketManager.isDeviceOnline(deviceId)) {
           // Get current delay for this device (starts at 0)
           let currentDeviceDelay = deviceDelayTracker.get(deviceId) || 0;
@@ -329,8 +330,21 @@ router.post('/manual',
           deviceDelayTracker.set(deviceId, currentDeviceDelay);
           
           setTimeout(async () => {
-            await DeviceWebSocketManager.sendCommand(deviceId, command);
+            try {
+              await DeviceWebSocketManager.sendCommand(deviceId, command);
+              logger.info(`Command sent to online device ${deviceId} for ${phoneNumber}`);
+            } catch (error) {
+              logger.error(`Failed to send command to device ${deviceId}:`, error);
+              // Update log status to failed if command sending fails
+              await DeviceLog.update(
+                { status: 'FAILED', error_message: error.message },
+                { where: { device_id: deviceId, recipient_number: phoneNumber, status: 'QUEUED' } }
+              );
+            }
           }, currentDeviceDelay);
+        } else {
+          // Device is offline - command will be sent when device comes online
+          logger.info(`Device ${deviceId} is offline, command queued for ${phoneNumber}`);
         }
 
         queuedCount++;

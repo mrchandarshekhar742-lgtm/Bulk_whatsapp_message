@@ -20,17 +20,17 @@ class DeviceRotationEngine {
       throw new Error('No devices available');
     }
 
-    // Get devices with current status
+    // Get devices with current status - Allow offline devices for campaign creation
     const devices = await Device.findAll({
       where: {
         id: { [Op.in]: deviceIds },
         is_active: true,
-        is_online: true,
+        // Removed is_online requirement - devices can be offline during campaign creation
       },
     });
 
     if (devices.length === 0) {
-      throw new Error('No active online devices available');
+      throw new Error('No active devices available');
     }
 
     // Filter devices that haven't reached daily limit
@@ -39,7 +39,12 @@ class DeviceRotationEngine {
     );
 
     if (availableDevices.length === 0) {
-      throw new Error('All devices have reached their daily limit');
+      // If all devices reached limit, use the one with lowest usage
+      const deviceWithLowestUsage = devices.reduce((prev, current) => 
+        (prev.messages_sent_today < current.messages_sent_today) ? prev : current
+      );
+      logger.warn(`All devices reached daily limit, using device ${deviceWithLowestUsage.id} with lowest usage`);
+      return deviceWithLowestUsage.id;
     }
 
     let selectedDevice;
