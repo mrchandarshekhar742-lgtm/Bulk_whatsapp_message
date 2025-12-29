@@ -9,15 +9,19 @@ const DeviceRotationEngine = require('../services/DeviceRotationEngine');
 const { sanitizeMessage, sanitizePhoneNumber, sanitizeName } = require('../utils/sanitizer');
 const { Op } = require('sequelize');
 
-// Rate limiting for campaign creation
+// Rate limiting for campaign creation - More lenient for testing
 const campaignCreateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // Limit each user to 10 campaign creations per windowMs
+  max: 50, // Increased from 10 to 50 campaigns per window
   message: {
     error: 'Too many campaigns created, please try again later.',
   },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    // Skip rate limiting for localhost/development
+    return req.ip === '127.0.0.1' || req.ip === '::1' || process.env.NODE_ENV === 'development';
+  },
 });
 
 // Validation middleware
