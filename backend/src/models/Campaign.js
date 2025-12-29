@@ -1,35 +1,43 @@
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('./index');
 
-const ExcelRecord = sequelize.define('ExcelRecord', {
+const Campaign = sequelize.define('Campaign', {
   id: {
     type: DataTypes.INTEGER,
     primaryKey: true,
     autoIncrement: true
   },
-  filename: {
+  name: {
     type: DataTypes.STRING,
     allowNull: false
   },
-  original_name: {
-    type: DataTypes.STRING,
+  message: {
+    type: DataTypes.TEXT,
     allowNull: false
   },
-  file_path: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
-  total_records: {
+  total_numbers: {
     type: DataTypes.INTEGER,
     defaultValue: 0
   },
-  processed_records: {
+  sent_count: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0
+  },
+  failed_count: {
     type: DataTypes.INTEGER,
     defaultValue: 0
   },
   status: {
-    type: DataTypes.ENUM('UPLOADED', 'PROCESSING', 'COMPLETED', 'FAILED'),
-    defaultValue: 'UPLOADED'
+    type: DataTypes.ENUM('QUEUED', 'RUNNING', 'PAUSED', 'COMPLETED', 'FAILED'),
+    defaultValue: 'QUEUED'
+  },
+  excel_record_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'excel_records',
+      key: 'id'
+    }
   },
   user_id: {
     type: DataTypes.INTEGER,
@@ -46,12 +54,20 @@ const ExcelRecord = sequelize.define('ExcelRecord', {
   updated_at: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW
+  },
+  started_at: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  completed_at: {
+    type: DataTypes.DATE,
+    allowNull: true
   }
 }, {
-  tableName: 'excel_records',
+  tableName: 'campaigns',
   timestamps: true,
   createdAt: 'created_at',
   updatedAt: 'updated_at'
 });
 
-module.exports = ExcelRecord;
+module.exports = Campaign;

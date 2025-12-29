@@ -57,7 +57,6 @@ class MainActivity : AppCompatActivity() {
         
         // Load saved server URL
         binding.etServerUrl.setText(PrefsHelper.getServerUrl(this))
-        // Set hint to show domain instead of IP
         binding.etServerUrl.hint = "wss://www.wxon.in/ws/device"
         
         // Save button
@@ -135,20 +134,51 @@ class MainActivity : AppCompatActivity() {
         }
         
         if (!WhatsAppHelper.isWhatsAppInstalled(this)) {
+            val whatsappInfo = WhatsAppHelper.getWhatsAppInfo(this)
+            val compatibilityInfo = WhatsAppHelper.getCompatibilityInfo()
             AlertDialog.Builder(this)
-                .setTitle("Warning")
-                .setMessage("WhatsApp is not installed. Please install WhatsApp to send messages.")
-                .setPositiveButton("OK", null)
+                .setTitle("WhatsApp Setup Required")
+                .setMessage("WhatsApp needs to be properly set up for this device.\n\n" +
+                        "Device Info: $compatibilityInfo\n\n" +
+                        "WhatsApp Status: $whatsappInfo\n\n" +
+                        "Setup Steps:\n" +
+                        "1. Install WhatsApp from Play Store\n" +
+                        "2. Open WhatsApp and complete setup\n" +
+                        "3. Verify your phone number\n" +
+                        "4. Grant all permissions\n" +
+                        "5. Restart this app\n\n" +
+                        "For Android 15 devices:\n" +
+                        "• Ensure WhatsApp is updated to latest version\n" +
+                        "• Allow all app permissions in Settings\n" +
+                        "• Set WhatsApp as default for messaging links")
+                .setPositiveButton("Install WhatsApp") { _, _ ->
+                    try {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=com.whatsapp"))
+                        startActivity(intent)
+                    } catch (e: Exception) {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=com.whatsapp"))
+                        startActivity(intent)
+                    }
+                }
+                .setNeutralButton("Test Anyway") { _, _ ->
+                    startServiceInternal()
+                }
+                .setNegativeButton("Cancel", null)
                 .show()
+        } else {
+            Log.d("MainActivity", "✅ WhatsApp detected: ${WhatsAppHelper.getWhatsAppInfo(this)}")
+            Log.d("MainActivity", "✅ Compatibility: ${WhatsAppHelper.getCompatibilityInfo()}")
+            startServiceInternal()
         }
-        
+    }
+
+    private fun startServiceInternal() {
         val intent = Intent(this, WhatsAppSenderService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(intent)
         } else {
             startService(intent)
         }
-        
         binding.tvStatus.text = "Status: Starting..."
     }
     
@@ -275,6 +305,22 @@ class MainActivity : AppCompatActivity() {
                     .setNegativeButton("Later", null)
                     .show()
             }
+        }
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        // Inflate the menu; this adds items to the action bar if it is present.
+        menuInflater.inflate(R.menu.menu_main, menu)
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        // Handle action bar item clicks here. The action bar will
+        // automatically handle clicks on the Home/Up button, so long
+        // as you specify a parent activity in AndroidManifest.xml.
+        return when (item.itemId) {
+            R.id.action_settings -> true
+            else -> super.onOptionsItemSelected(item)
         }
     }
 }

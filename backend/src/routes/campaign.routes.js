@@ -2,12 +2,26 @@ const express = require('express');
 const router = express.Router();
 const rateLimit = require('express-rate-limit');
 const { body, param, query, validationResult } = require('express-validator');
-const { Device, DeviceLog, DeviceCommand, ExcelRecord } = require('../models');
+const { Device, DeviceLog, DeviceCommand, ExcelRecord, Campaign } = require('../models');
 const { verifyToken } = require('../middleware/auth');
 const DeviceWebSocketManager = require('../services/DeviceWebSocketManager');
 const DeviceRotationEngine = require('../services/DeviceRotationEngine');
 const { sanitizeMessage, sanitizePhoneNumber, sanitizeName } = require('../utils/sanitizer');
 const { Op } = require('sequelize');
+const winston = require('winston');
+
+// Configure logger
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.Console(),
+    new winston.transports.File({ filename: 'logs/campaign.log' })
+  ]
+});
 
 // Rate limiting for campaign creation - More lenient for testing
 const campaignCreateLimiter = rateLimit({

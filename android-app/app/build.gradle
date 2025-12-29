@@ -9,12 +9,23 @@ android {
 
     defaultConfig {
         applicationId "com.whatsapppro.bulksender"
-        minSdk 24
+        minSdk 19  // Android 4.4 KitKat - Universal compatibility
         targetSdk 34
-        versionCode 1
-        versionName "1.0.0"
+        versionCode 3
+        versionName "3.0.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        
+        // Multi-dex support for older devices
+        multiDexEnabled true
+        
+        // Vector drawable support for older devices
+        vectorDrawables.useSupportLibrary = true
+        
+        // Ensure compatibility across all Android versions
+        ndk {
+            abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
+        }
     }
 
     buildTypes {
@@ -39,38 +50,39 @@ android {
 }
 
 dependencies {
-    // Core Android
-    implementation 'androidx.core:core-ktx:1.12.0'
+    // Core Android - Universal compatibility versions
+    implementation 'androidx.core:core-ktx:1.9.0'  // Compatible with API 19+
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'com.google.android.material:material:1.9.0'  // Better compatibility
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     
-    // Lifecycle
-    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
-    implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0'
-    implementation 'androidx.lifecycle:lifecycle-service:2.7.0'
+    // Multi-dex support for older devices
+    implementation 'androidx.multidex:multidex:2.0.1'
     
-    // Coroutines
-    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
-    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3'
+    // Lifecycle - Compatible versions
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.6.2'
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.2'
+    implementation 'androidx.lifecycle:lifecycle-service:2.6.2'
     
-    // WebSocket (OkHttp)
-    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    // Coroutines - Stable version
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.4'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4'
     
-    // JSON (Gson)
+    // WebSocket (OkHttp) - Compatible version
+    implementation 'com.squareup.okhttp3:okhttp:4.10.0'
+    
+    // JSON (Gson) - Stable version
     implementation 'com.google.code.gson:gson:2.10.1'
     
-    // Room Database
-    implementation 'androidx.room:room-runtime:2.6.1'
-    implementation 'androidx.room:room-ktx:2.6.1'
-    // Temporarily disable KSP for Room to simplify build
-    // ksp 'androidx.room:room-compiler:2.6.1'
-    
-    // WorkManager (for background tasks)
-    implementation 'androidx.work:work-runtime-ktx:2.9.0'
+    // WorkManager - Compatible version
+    implementation 'androidx.work:work-runtime-ktx:2.8.1'
     
     // SharedPreferences
     implementation 'androidx.preference:preference-ktx:1.2.1'
+    
+    // Vector drawable support for older devices
+    implementation 'androidx.vectordrawable:vectordrawable:1.1.0'
+    implementation 'androidx.vectordrawable:vectordrawable-animated:1.1.0'
     
     // Testing
     testImplementation 'junit:junit:4.13.2'
