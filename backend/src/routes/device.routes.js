@@ -499,3 +499,216 @@ router.get('/status/online', verifyToken, async (req, res) => {
 });
 
 module.exports = router;
+// ============================================================================
+// NEW: DEVICE TIMING ANALYTICS ENDPOINTS
+// ============================================================================
+
+// Get timing analytics for a specific device
+router.get('/:id/timing-analytics',
+  verifyToken,
+  [
+    param('id').isInt().withMessage('Device ID must be an integer'),
+    query('days').optional().isInt({ min: 1, max: 90 }).withMessage('Days must be between 1 and 90'),
+  ],
+  validate,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const days = parseInt(req.query.days) || 7; // Default to 7 days
+
+      // Verify device belongs to user
+      const device = await Device.findOne({
+        where: {
+          id,
+          user_id: req.user.id,
+        },
+      });
+
+      if (!device) {
+        return res.status(404).json({ error: 'Device not found' });
+      }
+
+      // Get device logs from last N days with timing data
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+
+      const deviceLogs = await DeviceLog.findAll({
+        where: {
+          device_id: id,
+          status: { [Op.in]: ['SENT', 'DELIVERED'] },
+          sent_at: { [Op.gte]: startDate },
+          time_gap_ms: { [Op.not]: null },
+        },
+        order: [['sent_at', 'ASC']],
+      });
+
+      if (deviceLogs.length === 0) {
+        return res.json({
+          success: true,
+          device_timing_analytics: {
+            device_id: id,
+            device_label: device.device_label,
+            period_days: days,
+            total_messages: 0,
+            avg_time_gap: 0,
+            min_time_gap: 0,
+            max_time_gap: 0,
+            avg_delivery_time: 0,
+            daily_breakdown: {},
+            hourly_pattern: {},
+          },
+        });
+      }
+
+      // Calculate timing analytics
+      const timeGaps = deviceLogs.map(log => log.time_gap_ms).filter(gap => gap !== null);
+      const deliveryTimes = deviceLogs.map(log => log.delivery_time_ms).filter(time => time !== null);
+
+      const analytics = {
+        device_id: id,
+        device_label: device.device_label,
+        period_days: days,
+        total_messages: deviceLogs.length,
+        avg_time_gap: timeGaps.length > 0 ? Math.round(timeGaps.reduce((a, b) => a + b, 0) / timeGaps.length) : 0,
+        min_time_gap: timeGaps.length > 0 ? Math.min(...timeGaps) : 0,
+        max_time_gap: timeGaps.length > 0 ? Math.max(...timeGaps) : 0,
+        avg_delivery_time: deliveryTimes.length > 0 ? Math.round(deliveryTimes.reduce((a, b) => a + b, 0) / deliveryTimes.length) : 0,
+        daily_breakdown: {},
+        hourly_pattern: {},
+      };
+
+      // Daily breakdown
+      const dailyGroups = deviceLogs.reduce((groups, log) => {
+        const date = log.sent_at.toISOString().split('T')[0];
+        if (!groups[date]) {
+          groups[date] = [];
+        }
+        groups[date].push(log);
+        return groups;
+      }, {});
+
+      for (const [date, logs] of Object.entries(dailyGroups)) {
+        const dayTimeGaps = logs.map(log => log.time_gap_ms).filter(gap => gap !== null);
+        analytics.daily_breakdown[date] = {
+          message_count: logs.length,
+          avg_time_gap: dayTimeGaps.length > 0 ? Math.round(dayTimeGaps.reduce((a, b) => a + b, 0) / dayTimeGaps.length) : 0,
+        };
+      }
+
+      // Hourly pattern (0-23 hours)
+      const hourlyGroups = deviceLogs.reduce((groups, log) => {
+        const hour = log.sent_at.getHours();
+        if (!groups[hour]) {
+          groups[hour] = [];
+        }
+        groups[hour].push(log);
+        return groups;
+      }, {});
+
+      for (const [hour, logs] of Object.entries(hourlyGroups)) {
+        const hourTimeGaps = logs.map(log => log.time_gap_ms).filter(gap => gap !== null);
+        analytics.hourly_pattern[hour] = {
+          message_count: logs.length,
+          avg_time_gap: hourTimeGaps.length > 0 ? Math.round(hourTimeGaps.reduce((a, b) => a + b, 0) / hourTimeGaps.length) : 0,
+        };
+      }
+
+      res.json({
+        success: true,
+        device_timing_analytics: analytics,
+      });
+
+    } catch (error) {
+      console.error('Error fetching device timing analytics:', error);
+      res.status(500).json({ error: 'Failed to fetch device timing analytics' });
+    }
+  }
+);
+
+// Get device performance summary
+router.get('/:id/performance-summary',
+  verifyToken,
+  [
+    param('id').isInt().withMessage('Device ID must be an integer'),
+  ],
+  validate,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      // Verify device belongs to user
+      const device = await Device.findOne({
+        where: {
+          id,
+          user_id: req.user.id,
+        },
+      });
+
+      if (!device) {
+        return res.status(404).json({ error: 'Device not found' });
+      }
+
+      // Get recent performance data (last 24 hours)
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      const recentLogs = await DeviceLog.findAll({
+        where: {
+          device_id: id,
+          created_at: { [Op.gte]: yesterday },
+        },
+      });
+
+      // Get device campaigns
+      const deviceCampaigns = await DeviceCampaign.findAll({
+        where: { device_id: id },
+        include: [{
+          model: Campaign,
+          attributes: ['id', 'name', 'status'],
+        }],
+      });
+
+      const performanceSummary = {
+        device_info: {
+          id: device.id,
+          device_label: device.device_label,
+          phone_number: device.phone_number,
+          is_online: device.is_online,
+          warmup_stage: device.warmup_stage,
+          daily_limit: device.daily_limit,
+          messages_sent_today: device.messages_sent_today,
+          capacity_remaining: device.daily_limit - device.messages_sent_today,
+        },
+        recent_activity: {
+          messages_last_24h: recentLogs.length,
+          successful_messages: recentLogs.filter(log => log.status === 'SENT' || log.status === 'DELIVERED').length,
+          failed_messages: recentLogs.filter(log => log.status === 'FAILED').length,
+          success_rate: recentLogs.length > 0 ? Math.round((recentLogs.filter(log => log.status === 'SENT' || log.status === 'DELIVERED').length / recentLogs.length) * 100) : 0,
+        },
+        campaign_participation: {
+          active_campaigns: deviceCampaigns.filter(dc => dc.Campaign && dc.Campaign.status === 'RUNNING').length,
+          total_campaigns: deviceCampaigns.length,
+          total_assigned_messages: deviceCampaigns.reduce((sum, dc) => sum + dc.assigned_message_count, 0),
+          total_sent_messages: deviceCampaigns.reduce((sum, dc) => sum + dc.messages_sent_in_campaign, 0),
+        },
+        overall_stats: {
+          total_messages_sent: device.total_messages_sent,
+          total_messages_failed: device.total_messages_failed,
+          overall_success_rate: device.total_messages_sent + device.total_messages_failed > 0 ? 
+            Math.round((device.total_messages_sent / (device.total_messages_sent + device.total_messages_failed)) * 100) : 0,
+          last_message_sent_at: device.last_message_sent_at,
+          last_seen: device.last_seen,
+        },
+      };
+
+      res.json({
+        success: true,
+        performance_summary: performanceSummary,
+      });
+
+    } catch (error) {
+      console.error('Error fetching device performance summary:', error);
+      res.status(500).json({ error: 'Failed to fetch device performance summary' });
+    }
+  }
+);

@@ -1,6 +1,8 @@
 package com.whatsapppro.bulksender.ui
 
 import android.Manifest
+import android.app.AlarmManager
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -31,69 +33,69 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class MainActivity : AppCompatActivity() {
-    
+
     private lateinit var binding: ActivityMainBinding
     private val PERMISSION_REQUEST_CODE = 100
     private var autoRefreshJob: Job? = null
-    
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        
+
         setSupportActionBar(binding.toolbar)
-        
+
         setupUI()
         checkPermissions()
         requestBatteryOptimizationExemption()
     }
-    
+
     private fun setupUI() {
         // Load saved token
         val savedToken = PrefsHelper.getDeviceToken(this)
         if (!savedToken.isNullOrEmpty()) {
             binding.etDeviceToken.setText(savedToken)
         }
-        
+
         // Load saved server URL
         binding.etServerUrl.setText(PrefsHelper.getServerUrl(this))
         binding.etServerUrl.hint = "wss://www.wxon.in/ws/device"
-        
+
         // Save button
         binding.btnSave.setOnClickListener {
             saveConfiguration()
         }
-        
+
         // Start service button
         binding.btnStartService.setOnClickListener {
             startService()
         }
-        
+
         // Stop service button
         binding.btnStopService.setOnClickListener {
             stopService()
         }
-        
+
         // Keep screen on toggle
         binding.switchKeepScreenOn.isChecked = PrefsHelper.isKeepScreenOnEnabled(this)
         binding.switchKeepScreenOn.setOnCheckedChangeListener { _, isChecked ->
             PrefsHelper.setKeepScreenOn(this, isChecked)
             updateKeepScreenOn()
         }
-        
+
         // Auto-start toggle
         binding.switchAutoStart.isChecked = PrefsHelper.isAutoStartEnabled(this)
         binding.switchAutoStart.setOnCheckedChangeListener { _, isChecked ->
             PrefsHelper.setAutoStart(this, isChecked)
         }
-        
+
         updateKeepScreenOn()
     }
-    
+
     private fun saveConfiguration() {
         val token = binding.etDeviceToken.text.toString().trim()
         val serverUrl = binding.etServerUrl.text.toString().trim()
-        
+
         if (token.isEmpty()) {
             AlertDialog.Builder(this)
                 .setTitle("Error")
@@ -102,7 +104,7 @@ class MainActivity : AppCompatActivity() {
                 .show()
             return
         }
-        
+
         if (serverUrl.isEmpty()) {
             AlertDialog.Builder(this)
                 .setTitle("Error")
@@ -111,17 +113,17 @@ class MainActivity : AppCompatActivity() {
                 .show()
             return
         }
-        
+
         PrefsHelper.saveDeviceToken(this, token)
         PrefsHelper.saveServerUrl(this, serverUrl)
-        
+
         AlertDialog.Builder(this)
             .setTitle("Success")
             .setMessage("Configuration saved successfully")
             .setPositiveButton("OK", null)
             .show()
     }
-    
+
     private fun startService() {
         val token = PrefsHelper.getDeviceToken(this)
         if (token.isNullOrEmpty()) {
@@ -132,7 +134,7 @@ class MainActivity : AppCompatActivity() {
                 .show()
             return
         }
-        
+
         if (!WhatsAppHelper.isWhatsAppInstalled(this)) {
             val whatsappInfo = WhatsAppHelper.getWhatsAppInfo(this)
             val compatibilityInfo = WhatsAppHelper.getCompatibilityInfo()
@@ -181,13 +183,13 @@ class MainActivity : AppCompatActivity() {
         }
         binding.tvStatus.text = "Status: Starting..."
     }
-    
+
     private fun stopService() {
         val intent = Intent(this, WhatsAppSenderService::class.java)
         stopService(intent)
         binding.tvStatus.text = "Status: Stopped"
     }
-    
+
     private fun updateDeviceInfo() {
         lifecycleScope.launch(Dispatchers.IO) {
             val batteryLevel = DeviceInfoCollector.getBatteryLevel(this@MainActivity)
@@ -210,7 +212,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
-    
+
     private fun startAutoRefresh() {
         autoRefreshJob?.cancel()
         autoRefreshJob = lifecycleScope.launch {
@@ -220,7 +222,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
-    
+
     private fun updateKeepScreenOn() {
         if (PrefsHelper.isKeepScreenOnEnabled(this)) {
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -228,19 +230,17 @@ class MainActivity : AppCompatActivity() {
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
-    
+
     private fun checkPermissions() {
         val permissionsToRequest = mutableListOf<String>()
-        val permissions = listOf(
-            Manifest.permission.READ_PHONE_NUMBERS,
-            Manifest.permission.READ_PHONE_STATE
-        ).plus(
+        val permissions = mutableListOf<String>().apply {
+            add(Manifest.permission.READ_PHONE_NUMBERS)
+            add(Manifest.permission.READ_PHONE_STATE)
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                listOf(Manifest.permission.POST_NOTIFICATIONS)
-            } else {
-                emptyList()
+                add(Manifest.permission.POST_NOTIFICATIONS)
             }
-        )
+        }
 
         for (permission in permissions) {
             if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
@@ -252,6 +252,37 @@ class MainActivity : AppCompatActivity() {
             ActivityCompat.requestPermissions(this, permissionsToRequest.toTypedArray(), PERMISSION_REQUEST_CODE)
         } else {
             onPermissionsGranted()
+        }
+    }
+
+    private fun checkSpecialPermissions() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            if (!alarmManager.canScheduleExactAlarms()) {
+                AlertDialog.Builder(this)
+                    .setTitle("Exact Alarm Permission")
+                    .setMessage("This app needs exact alarm permission for precise message timing on latest Android versions.")
+                    .setPositiveButton("Grant Permission") { _, _ ->
+                        val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+                        startActivity(intent)
+                    }
+                    .setNegativeButton("Skip", null)
+                    .show()
+            }
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (!Settings.canDrawOverlays(this)) {
+                AlertDialog.Builder(this)
+                    .setTitle("Display Over Other Apps")
+                    .setMessage("This app needs permission to display over other apps for better WhatsApp integration on latest Android versions.")
+                    .setPositiveButton("Grant Permission") { _, _ ->
+                        val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
+                        startActivity(intent)
+                    }
+                    .setNegativeButton("Skip", null)
+                    .show()
+            }
         }
     }
 
@@ -272,26 +303,35 @@ class MainActivity : AppCompatActivity() {
 
     private fun onPermissionsGranted() {
         startAutoRefresh()
+        checkSpecialPermissions()
         requestAccessibilityPermission()
     }
-    
+
     private fun requestAccessibilityPermission() {
-        AlertDialog.Builder(this)
-            .setTitle("Enable Accessibility Service")
-            .setMessage("To automatically send WhatsApp messages, please enable accessibility service for this app in Settings.")
-            .setPositiveButton("Open Settings") { _, _ ->
-                val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                startActivity(intent)
-            }
-            .setNegativeButton("Later", null)
-            .show()
+        if (!isAccessibilityServiceEnabled()) {
+            AlertDialog.Builder(this)
+                .setTitle("Enable Accessibility Service")
+                .setMessage("To automatically send WhatsApp messages, please enable accessibility service for this app in Settings.")
+                .setPositiveButton("Open Settings") { _, _ ->
+                    val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                    startActivity(intent)
+                }
+                .setNegativeButton("Later", null)
+                .show()
+        }
+    }
+
+    private fun isAccessibilityServiceEnabled(): Boolean {
+        val expectedComponentName = "com.whatsapppro.bulksender/.service.WhatsAppAccessibilityService"
+        val enabledServices = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+        return enabledServices?.contains(expectedComponentName) == true
     }
 
     private fun requestBatteryOptimizationExemption() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             val powerManager = getSystemService(POWER_SERVICE) as PowerManager
             val packageName = packageName
-            
+
             if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
                 AlertDialog.Builder(this)
                     .setTitle("Battery Optimization")
@@ -309,17 +349,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
-        // Inflate the menu; this adds items to the action bar if it is present.
         menuInflater.inflate(R.menu.menu_main, menu)
         return true
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        // Handle action bar item clicks here. The action bar will
-        // automatically handle clicks on the Home/Up button, so long
-        // as you specify a parent activity in AndroidManifest.xml.
         return when (item.itemId) {
-            R.id.action_settings -> true
+            R.id.action_settings -> {
+                startActivity(Intent(this, SettingsActivity::class.java))
+                true
+            }
             else -> super.onOptionsItemSelected(item)
         }
     }

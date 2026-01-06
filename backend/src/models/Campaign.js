@@ -47,6 +47,26 @@ const Campaign = sequelize.define('Campaign', {
       key: 'id'
     }
   },
+  
+  // NEW: Device Management Features
+  device_message_distribution: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    comment: 'Per-device message allocation: {deviceId: messageCount}'
+  },
+  
+  // NEW: Timing Configuration & Analytics
+  timing_config: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    comment: 'Timing settings: {min_delay, max_delay, strategy, custom_delays}'
+  },
+  timing_analytics: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    comment: 'Timing stats: {avg_gap, min_gap, max_gap, avg_delivery_time}'
+  },
+  
   created_at: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MdDashboard, MdDescription, MdPerson, MdLogout, MdChevronRight, MdMenu, MdClose, MdPhoneAndroid, MdSend, MdHistory, MdUpload } from 'react-icons/md';
+import { MdDashboard, MdDescription, MdPerson, MdLogout, MdChevronRight, MdMenu, MdClose, MdPhoneAndroid, MdSend, MdHistory, MdUpload, MdTimer } from 'react-icons/md';
 import { useAuth } from '../hooks/useAuth';
 
 export function Sidebar() {
@@ -14,6 +14,7 @@ export function Sidebar() {
     { icon: MdPhoneAndroid, label: 'Devices', path: '/devices' },
     { icon: MdSend, label: 'Create Campaign', path: '/create-campaign' },
     { icon: MdHistory, label: 'Campaign Logs', path: '/logs' },
+    { icon: MdTimer, label: 'Timing Analytics', path: '/timing-analytics' },
     { icon: MdUpload, label: 'Excel Upload', path: '/excel' },
     { icon: MdPerson, label: 'Profile', path: '/profile' },
   ];

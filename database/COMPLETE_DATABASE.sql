@@ -134,6 +134,10 @@ CREATE TABLE device_logs (
     sent_at TIMESTAMP NULL,
     delivered_at TIMESTAMP NULL,
     
+    -- NEW: Time Tracking Features
+    time_gap_ms INT NULL COMMENT 'Milliseconds between this message and previous message from same device',
+    delivery_time_ms INT NULL COMMENT 'Time from sent to delivered in milliseconds',
+    
     device_ip VARCHAR(45) NULL,
     network_type VARCHAR(50) NULL,
     
@@ -146,7 +150,9 @@ CREATE TABLE device_logs (
     INDEX idx_device_id (device_id),
     INDEX idx_status (status),
     INDEX idx_created_at (created_at),
-    INDEX idx_recipient (recipient_number)
+    INDEX idx_recipient (recipient_number),
+    INDEX idx_time_gap (time_gap_ms),
+    INDEX idx_delivery_time (delivery_time_ms)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 6. DEVICE COMMANDS (Command Queue for Android App)
@@ -174,11 +180,15 @@ CREATE TABLE device_commands (
     INDEX idx_priority (priority)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 7. DEVICE CAMPAIGNS (Campaign-Device Mapping)
+-- 7. DEVICE CAMPAIGNS (Campaign-Device Mapping with Message Allocation)
 CREATE TABLE device_campaigns (
     id INT PRIMARY KEY AUTO_INCREMENT,
     campaign_id INT NOT NULL,
     device_id INT NOT NULL,
+    
+    -- NEW: Per-Device Message Management
+    assigned_message_count INT DEFAULT 0 COMMENT 'How many messages this device should send in this campaign',
+    messages_sent_in_campaign INT DEFAULT 0 COMMENT 'How many messages this device has sent in this campaign',
     
     assigned_count INT DEFAULT 0,
     sent_count INT DEFAULT 0,
@@ -191,7 +201,8 @@ CREATE TABLE device_campaigns (
     
     UNIQUE KEY unique_campaign_device (campaign_id, device_id),
     INDEX idx_campaign_id (campaign_id),
-    INDEX idx_device_id (device_id)
+    INDEX idx_device_id (device_id),
+    INDEX idx_assigned_count (assigned_message_count)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================================
@@ -216,9 +227,14 @@ CREATE TABLE campaigns (
     failed_count INT DEFAULT 0,
     pending_count INT DEFAULT 0,
     
-    -- Device Rotation
+    -- Device Rotation & Management
     rotation_mode ENUM('RANDOM', 'ROUND_ROBIN', 'LEAST_USED', 'WARMUP_AWARE') DEFAULT 'WARMUP_AWARE',
     selected_devices JSON NULL COMMENT 'Array of device IDs',
+    device_message_distribution JSON NULL COMMENT 'Per-device message allocation: {deviceId: messageCount}',
+    
+    -- NEW: Timing Configuration & Analytics
+    timing_config JSON NULL COMMENT 'Timing settings: {min_delay, max_delay, strategy, custom_delays}',
+    timing_analytics JSON NULL COMMENT 'Timing stats: {avg_gap, min_gap, max_gap, avg_delivery_time}',
     
     scheduled_at TIMESTAMP NULL,
     started_at TIMESTAMP NULL,

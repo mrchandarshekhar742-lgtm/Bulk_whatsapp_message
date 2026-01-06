@@ -141,6 +141,10 @@ class DeviceWebSocketManager {
           await this.handleMessageFailed(deviceId, message.data);
           break;
 
+        case 'MESSAGE_DELIVERED':
+          await this.handleMessageDelivered(deviceId, message.data);
+          break;
+
         case 'COMMAND_ACK':
           await this.handleCommandAck(deviceId, message.data);
           break;
@@ -174,7 +178,7 @@ class DeviceWebSocketManager {
   }
 
   async handleMessageSent(deviceId, data) {
-    const { DeviceLog } = require('../models');
+    const { DeviceLog, DeviceCampaign } = require('../models');
     
     // Update device log
     const log = await DeviceLog.findOne({
@@ -187,12 +191,47 @@ class DeviceWebSocketManager {
     });
 
     if (log) {
+      const sentAt = new Date();
+      
+      // Calculate time gap from previous message from same device
+      let timeGapMs = null;
+      const previousLog = await DeviceLog.findOne({
+        where: {
+          device_id: deviceId,
+          status: { [Op.in]: ['SENT', 'DELIVERED'] },
+          sent_at: { [Op.not]: null },
+        },
+        order: [['sent_at', 'DESC']],
+      });
+
+      if (previousLog && previousLog.sent_at) {
+        timeGapMs = sentAt.getTime() - previousLog.sent_at.getTime();
+      }
+
       await log.update({
         status: 'SENT',
-        sent_at: new Date(),
+        sent_at: sentAt,
+        time_gap_ms: timeGapMs,
         device_ip: data.device_ip,
         network_type: data.network_type,
       });
+
+      // Update device campaign progress if this is part of a campaign
+      if (log.campaign_id) {
+        const deviceCampaign = await DeviceCampaign.findOne({
+          where: {
+            campaign_id: log.campaign_id,
+            device_id: deviceId,
+          },
+        });
+
+        if (deviceCampaign) {
+          await deviceCampaign.update({
+            messages_sent_in_campaign: deviceCampaign.messages_sent_in_campaign + 1,
+            sent_count: deviceCampaign.sent_count + 1,
+          });
+        }
+      }
     }
 
     // Update device stats
@@ -209,7 +248,7 @@ class DeviceWebSocketManager {
   }
 
   async handleMessageFailed(deviceId, data) {
-    const { DeviceLog } = require('../models');
+    const { DeviceLog, DeviceCampaign } = require('../models');
     
     // Update device log
     const log = await DeviceLog.findOne({
@@ -226,6 +265,22 @@ class DeviceWebSocketManager {
         status: 'FAILED',
         error_message: data.error_message,
       });
+
+      // Update device campaign progress if this is part of a campaign
+      if (log.campaign_id) {
+        const deviceCampaign = await DeviceCampaign.findOne({
+          where: {
+            campaign_id: log.campaign_id,
+            device_id: deviceId,
+          },
+        });
+
+        if (deviceCampaign) {
+          await deviceCampaign.update({
+            failed_count: deviceCampaign.failed_count + 1,
+          });
+        }
+      }
     }
 
     // Update device stats
@@ -237,6 +292,38 @@ class DeviceWebSocketManager {
     }
 
     logger.error(`Message failed from device ${deviceId}: ${data.error_message}`);
+  }
+
+  async handleMessageDelivered(deviceId, data) {
+    const { DeviceLog } = require('../models');
+    
+    // Update device log
+    const log = await DeviceLog.findOne({
+      where: {
+        device_id: deviceId,
+        recipient_number: data.recipient_number,
+        status: 'SENT',
+      },
+      order: [['sent_at', 'DESC']],
+    });
+
+    if (log) {
+      const deliveredAt = new Date();
+      let deliveryTimeMs = null;
+
+      // Calculate delivery time if sent_at exists
+      if (log.sent_at) {
+        deliveryTimeMs = deliveredAt.getTime() - log.sent_at.getTime();
+      }
+
+      await log.update({
+        status: 'DELIVERED',
+        delivered_at: deliveredAt,
+        delivery_time_ms: deliveryTimeMs,
+      });
+    }
+
+    logger.info(`Message delivered from device ${deviceId} to ${data.recipient_number}`);
   }
 
   async handleCommandAck(deviceId, data) {

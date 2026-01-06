@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MdPhoneAndroid, MdAdd, MdDelete, MdRefresh, MdSignalCellularAlt, MdClose } from 'react-icons/md';
+import { MdPhoneAndroid, MdAdd, MdDelete, MdRefresh, MdSignalCellularAlt, MdClose, MdTimer, MdBarChart } from 'react-icons/md';
 import DashboardLayout from '../components/DashboardLayout';
 import api from '../api/client';
 
@@ -250,6 +250,33 @@ export default function DevicesPage() {
                 </div>
               </div>
 
+              {/* Action Buttons */}
+              <div className="flex gap-2 mt-4">
+                <button
+                  onClick={() => handleViewPerformance(device)}
+                  className="flex-1 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-xs font-medium flex items-center justify-center gap-1"
+                >
+                  <MdBarChart />
+                  Performance
+                </button>
+                <button
+                  onClick={() => handleToggleActive(device)}
+                  className={`flex-1 px-3 py-2 rounded-lg transition-colors text-xs font-medium ${
+                    device.is_active
+                      ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
+                      : 'bg-green-100 text-green-700 hover:bg-green-200'
+                  }`}
+                >
+                  {device.is_active ? 'Pause' : 'Activate'}
+                </button>
+                <button
+                  onClick={() => handleDeleteDevice(device.id)}
+                  className="px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-xs font-medium"
+                >
+                  <MdDelete />
+                </button>
+              </div>
+
               {/* Network Type */}
               {device.network_type && (
                 <div className="mt-3 pt-3 border-t border-gray-100">
@@ -376,3 +403,186 @@ export default function DevicesPage() {
     </DashboardLayout>
   );
 }
+  // NEW: Device performance summary
+  const [selectedDevice, setSelectedDevice] = useState(null);
+  const [performanceSummary, setPerformanceSummary] = useState(null);
+  const [loadingPerformance, setLoadingPerformance] = useState(false);
+
+  const fetchPerformanceSummary = async (deviceId) => {
+    setLoadingPerformance(true);
+    try {
+      const response = await api.get(`/api/devices/${deviceId}/performance-summary`);
+      setPerformanceSummary(response.data.performance_summary);
+    } catch (error) {
+      console.error('Error fetching performance summary:', error);
+    } finally {
+      setLoadingPerformance(false);
+    }
+  };
+
+  const handleViewPerformance = (device) => {
+    setSelectedDevice(device);
+    fetchPerformanceSummary(device.id);
+  };
+      {/* Performance Summary Modal */}
+      <AnimatePresence>
+        {selectedDevice && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedDevice(null)}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-white rounded-2xl p-6 w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto"
+              >
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900">Device Performance</h3>
+                    <p className="text-gray-600">{selectedDevice.device_label}</p>
+                  </div>
+                  <button
+                    onClick={() => setSelectedDevice(null)}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    <MdClose className="text-xl text-gray-500" />
+                  </button>
+                </div>
+
+                {loadingPerformance ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  </div>
+                ) : performanceSummary ? (
+                  <div className="space-y-6">
+                    {/* Device Info */}
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <h4 className="font-semibold text-gray-900 mb-3">Device Information</h4>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="text-gray-600">Status:</span>
+                          <span className={`ml-2 font-medium ${
+                            performanceSummary.device_info.is_online ? 'text-green-600' : 'text-gray-500'
+                          }`}>
+                            {performanceSummary.device_info.is_online ? 'Online' : 'Offline'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Phone:</span>
+                          <span className="ml-2 font-medium">{performanceSummary.device_info.phone_number || 'Not set'}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Warmup Stage:</span>
+                          <span className="ml-2 font-medium">{performanceSummary.device_info.warmup_stage?.replace('STAGE_', 'Stage ')}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Daily Limit:</span>
+                          <span className="ml-2 font-medium">{performanceSummary.device_info.daily_limit}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Recent Activity */}
+                    <div className="bg-blue-50 rounded-lg p-4">
+                      <h4 className="font-semibold text-gray-900 mb-3">Recent Activity (24h)</h4>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-blue-600">{performanceSummary.recent_activity.messages_last_24h}</div>
+                          <div className="text-xs text-gray-600">Messages Sent</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-green-600">{performanceSummary.recent_activity.successful_messages}</div>
+                          <div className="text-xs text-gray-600">Successful</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-red-600">{performanceSummary.recent_activity.failed_messages}</div>
+                          <div className="text-xs text-gray-600">Failed</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-purple-600">{performanceSummary.recent_activity.success_rate}%</div>
+                          <div className="text-xs text-gray-600">Success Rate</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Campaign Participation */}
+                    <div className="bg-green-50 rounded-lg p-4">
+                      <h4 className="font-semibold text-gray-900 mb-3">Campaign Participation</h4>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-green-600">{performanceSummary.campaign_participation.active_campaigns}</div>
+                          <div className="text-xs text-gray-600">Active Campaigns</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-blue-600">{performanceSummary.campaign_participation.total_campaigns}</div>
+                          <div className="text-xs text-gray-600">Total Campaigns</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-orange-600">{performanceSummary.campaign_participation.total_assigned_messages}</div>
+                          <div className="text-xs text-gray-600">Assigned Messages</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-purple-600">{performanceSummary.campaign_participation.total_sent_messages}</div>
+                          <div className="text-xs text-gray-600">Sent Messages</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Overall Stats */}
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <h4 className="font-semibold text-gray-900 mb-3">Overall Statistics</h4>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="text-gray-600">Total Messages Sent:</span>
+                          <span className="ml-2 font-medium">{performanceSummary.overall_stats.total_messages_sent.toLocaleString()}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Total Failed:</span>
+                          <span className="ml-2 font-medium text-red-600">{performanceSummary.overall_stats.total_messages_failed.toLocaleString()}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Overall Success Rate:</span>
+                          <span className="ml-2 font-medium text-green-600">{performanceSummary.overall_stats.overall_success_rate}%</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Last Message:</span>
+                          <span className="ml-2 font-medium">
+                            {performanceSummary.overall_stats.last_message_sent_at 
+                              ? new Date(performanceSummary.overall_stats.last_message_sent_at).toLocaleString()
+                              : 'Never'
+                            }
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Timing Analytics Button */}
+                    <div className="flex justify-center pt-4">
+                      <button
+                        onClick={() => {
+                          setSelectedDevice(null);
+                          window.location.href = '/timing-analytics';
+                        }}
+                        className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                      >
+                        <MdTimer />
+                        View Detailed Timing Analytics
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    Failed to load performance data
+                  </div>
+                )}
+              </motion.div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>

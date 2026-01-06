@@ -26,10 +26,11 @@ class WebSocketManager(
     val connectionState: StateFlow<ConnectionState> = _connectionState
     
     private val client = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
+        .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(0, TimeUnit.SECONDS) // No timeout for WebSocket
-        .writeTimeout(10, TimeUnit.SECONDS)
-        .pingInterval(30, TimeUnit.SECONDS)
+        .writeTimeout(15, TimeUnit.SECONDS)
+        .pingInterval(25, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
         .build()
     
     fun connect() {
@@ -41,8 +42,11 @@ class WebSocketManager(
         
         _connectionState.value = ConnectionState.CONNECTING
         
-        val url = "$serverUrl?token=$deviceToken"
+        // Validate and fix server URL if needed
+        val validatedServerUrl = validateServerUrl(serverUrl)
+        val url = "$validatedServerUrl?token=$deviceToken"
         Log.d(TAG, "Final WebSocket URL: $url")
+        
         val request = Request.Builder()
             .url(url)
             .build()
@@ -101,12 +105,23 @@ class WebSocketManager(
     }
     
     fun sendMessage(message: WebSocketMessage) {
-        val json = gson.toJson(message)
-        val sent = webSocket?.send(json) ?: false
-        if (sent) {
-            Log.d(TAG, "Message sent: ${message.type}")
-        } else {
-            Log.e(TAG, "Failed to send message: ${message.type}")
+        try {
+            val json = gson.toJson(message)
+            val sent = webSocket?.send(json) ?: false
+            if (sent) {
+                Log.d(TAG, "Message sent: ${message.type}")
+            } else {
+                Log.e(TAG, "Failed to send message: ${message.type}")
+                // Try to reconnect if message sending fails
+                if (_connectionState.value == ConnectionState.CONNECTED) {
+                    _connectionState.value = ConnectionState.ERROR
+                    scheduleReconnect()
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception sending message: ${e.message}", e)
+            _connectionState.value = ConnectionState.ERROR
+            scheduleReconnect()
         }
     }
     
@@ -167,6 +182,17 @@ class WebSocketManager(
                 connect()
                 baseDelay = (baseDelay * 2).coerceAtMost(30000) // Max 30 seconds
             }
+        }
+    }
+    
+    private fun validateServerUrl(url: String): String {
+        return when {
+            url.startsWith("wss://") || url.startsWith("ws://") -> url
+            url.startsWith("https://") -> url.replace("https://", "wss://")
+            url.startsWith("http://") -> url.replace("http://", "wss://")
+            url.startsWith("www.") -> "wss://$url"
+            !url.contains("://") -> "wss://$url"
+            else -> url
         }
     }
     

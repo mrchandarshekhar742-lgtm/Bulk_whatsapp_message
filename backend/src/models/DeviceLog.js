@@ -67,6 +67,18 @@ const DeviceLog = sequelize.define('DeviceLog', {
     allowNull: true,
   },
   
+  // NEW: Time Tracking Features
+  time_gap_ms: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'Milliseconds between this message and previous message from same device',
+  },
+  delivery_time_ms: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'Time from sent to delivered in milliseconds',
+  },
+  
   // Device info at time of send
   device_ip: {
     type: DataTypes.STRING(45),

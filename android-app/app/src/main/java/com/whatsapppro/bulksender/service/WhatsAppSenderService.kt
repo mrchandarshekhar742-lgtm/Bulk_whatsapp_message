@@ -70,73 +70,102 @@ class WhatsAppSenderService : Service() {
             return
         }
         
-        webSocketManager = WebSocketManager(
-            serverUrl = serverUrl,
-            deviceToken = deviceToken,
-            onCommandReceived = { message ->
-                handleCommand(message)
-            }
-        )
-        
-        // Observe connection state
-        serviceScope.launch {
-            webSocketManager?.connectionState?.collect { state ->
-                withContext(Dispatchers.Main) {
-                    when (state) {
-                        WebSocketManager.ConnectionState.CONNECTED -> {
-                            updateNotification("Connected")
-                            sendStatusUpdate()
+        try {
+            webSocketManager = WebSocketManager(
+                serverUrl = serverUrl,
+                deviceToken = deviceToken,
+                onCommandReceived = { message ->
+                    try {
+                        handleCommand(message)
+                    } catch (e: Exception) {
+                        Log.e(tag, "Error handling command: ${e.message}", e)
+                        updateNotification("Command Error - Retrying...")
+                    }
+                }
+            )
+            
+            // Observe connection state
+            serviceScope.launch {
+                webSocketManager?.connectionState?.collect { state ->
+                    try {
+                        withContext(Dispatchers.Main) {
+                            when (state) {
+                                WebSocketManager.ConnectionState.CONNECTED -> {
+                                    updateNotification("Connected")
+                                    sendStatusUpdate()
+                                }
+                                WebSocketManager.ConnectionState.CONNECTING -> {
+                                    updateNotification("Connecting...")
+                                }
+                                WebSocketManager.ConnectionState.DISCONNECTED -> {
+                                    updateNotification("Disconnected - Will retry")
+                                }
+                                WebSocketManager.ConnectionState.ERROR -> {
+                                    updateNotification("Connection Error - Retrying...")
+                                }
+                            }
                         }
-                        WebSocketManager.ConnectionState.CONNECTING -> {
-                            updateNotification("Connecting...")
-                        }
-                        WebSocketManager.ConnectionState.DISCONNECTED -> {
-                            updateNotification("Disconnected")
-                        }
-                        WebSocketManager.ConnectionState.ERROR -> {
-                            updateNotification("Connection Error")
-                        }
+                    } catch (e: Exception) {
+                        Log.e(tag, "Error updating connection state: ${e.message}", e)
                     }
                 }
             }
+            
+            webSocketManager?.connect()
+        } catch (e: Exception) {
+            Log.e(tag, "Error initializing WebSocket: ${e.message}", e)
+            updateNotification("Initialization Error - Retrying...")
+            
+            // Retry after delay
+            serviceScope.launch {
+                delay(5000)
+                initializeWebSocket()
+            }
         }
-        
-        webSocketManager?.connect()
     }
     
     private fun handleCommand(message: WebSocketMessage) {
         Log.d(tag, "Handling command: ${message.commandType}")
         
-        // Send acknowledgment
-        message.commandId?.let { commandId ->
-            sendCommandAck(commandId)
-        }
-        
-        when (message.commandType) {
-            CommandType.SEND_MESSAGE -> {
-                message.payload?.let { payload ->
-                    sendWhatsAppMessage(payload)
+        try {
+            // Send acknowledgment
+            message.commandId?.let { commandId ->
+                sendCommandAck(commandId)
+            }
+            
+            when (message.commandType) {
+                CommandType.SEND_MESSAGE -> {
+                    message.payload?.let { payload ->
+                        sendWhatsAppMessage(payload)
+                    } ?: run {
+                        Log.e(tag, "No payload found for SEND_MESSAGE command")
+                    }
+                }
+                
+                CommandType.SEND_MEDIA -> {
+                    message.payload?.let { _ ->
+                        // TODO: Implement media sending
+                        Log.d(tag, "Media sending not yet implemented")
+                    } ?: run {
+                        Log.e(tag, "No payload found for SEND_MEDIA command")
+                    }
+                }
+                
+                CommandType.SYNC_STATUS -> {
+                    sendStatusUpdate()
+                }
+                
+                CommandType.RESTART -> {
+                    restartConnection()
+                }
+                
+                else -> {
+                    Log.w(tag, "Unknown command type: ${message.commandType}")
                 }
             }
-            
-            CommandType.SEND_MEDIA -> {
-                message.payload?.let { _ ->
-                    // TODO: Implement media sending
-                    Log.d(tag, "Media sending not yet implemented")
-                }
-            }
-            
-            CommandType.SYNC_STATUS -> {
-                sendStatusUpdate()
-            }
-            
-            CommandType.RESTART -> {
-                restartConnection()
-            }
-            
-            else -> {
-                Log.w(tag, "Unknown command type: ${message.commandType}")
-            }
+        } catch (e: Exception) {
+            Log.e(tag, "Error handling command ${message.commandType}: ${e.message}", e)
+            updateNotification("Command Error - Continuing...")
         }
     }
     
@@ -215,21 +244,25 @@ class WhatsAppSenderService : Service() {
     
     private fun sendStatusUpdate() {
         serviceScope.launch {
-            val statusData = StatusUpdateData(
-                batteryLevel = DeviceInfoCollector.getBatteryLevel(this@WhatsAppSenderService),
-                networkType = DeviceInfoCollector.getNetworkType(this@WhatsAppSenderService),
-                androidVersion = DeviceInfoCollector.getAndroidVersion(),
-                appVersion = DeviceInfoCollector.getAppVersion(this@WhatsAppSenderService),
-                phoneNumber = DeviceInfoCollector.getPhoneNumber(this@WhatsAppSenderService)
-            )
-            
-            val message = WebSocketMessage(
-                type = MessageType.STATUS_UPDATE,
-                data = statusData
-            )
-            
-            webSocketManager?.sendMessage(message)
-            Log.d(tag, "Status update sent")
+            try {
+                val statusData = StatusUpdateData(
+                    batteryLevel = DeviceInfoCollector.getBatteryLevel(this@WhatsAppSenderService),
+                    networkType = DeviceInfoCollector.getNetworkType(this@WhatsAppSenderService),
+                    androidVersion = DeviceInfoCollector.getAndroidVersion(),
+                    appVersion = DeviceInfoCollector.getAppVersion(this@WhatsAppSenderService),
+                    phoneNumber = DeviceInfoCollector.getPhoneNumber(this@WhatsAppSenderService)
+                )
+                
+                val message = WebSocketMessage(
+                    type = MessageType.STATUS_UPDATE,
+                    data = statusData
+                )
+                
+                webSocketManager?.sendMessage(message)
+                Log.d(tag, "Status update sent")
+            } catch (e: Exception) {
+                Log.e(tag, "Error sending status update: ${e.message}", e)
+            }
         }
     }
     

@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const rateLimit = require('express-rate-limit');
 const { body, param, query, validationResult } = require('express-validator');
-const { Device, DeviceLog, DeviceCommand, ExcelRecord, Campaign } = require('../models');
+const { Device, DeviceLog, DeviceCommand, ExcelRecord, Campaign, DeviceCampaign } = require('../models');
 const { verifyToken } = require('../middleware/auth');
 const DeviceWebSocketManager = require('../services/DeviceWebSocketManager');
 const DeviceRotationEngine = require('../services/DeviceRotationEngine');
@@ -676,3 +676,288 @@ router.post('/retry-failed',
 );
 
 module.exports = router;
+
+// ============================================================================
+// NEW: DEVICE MANAGEMENT ENDPOINTS
+// ============================================================================
+
+// Update device allocation for a campaign
+router.put('/:id/device-allocation',
+  verifyToken,
+  [
+    param('id').isInt().withMessage('Campaign ID must be an integer'),
+    body('device_allocations').isObject().withMessage('Device allocations must be an object'),
+  ],
+  validate,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { device_allocations } = req.body; // {deviceId: messageCount}
+
+      // Verify campaign belongs to user
+      const campaign = await Campaign.findOne({
+        where: {
+          id,
+          user_id: req.user.id,
+        },
+      });
+
+      if (!campaign) {
+        return res.status(404).json({ error: 'Campaign not found' });
+      }
+
+      // Verify all devices belong to user
+      const deviceIds = Object.keys(device_allocations).map(id => parseInt(id));
+      const devices = await Device.findAll({
+        where: {
+          id: { [Op.in]: deviceIds },
+          user_id: req.user.id,
+          is_active: true,
+        },
+      });
+
+      if (devices.length !== deviceIds.length) {
+        return res.status(400).json({ error: 'Some devices not found or not active' });
+      }
+
+      // Update campaign with device allocation
+      await campaign.update({
+        device_message_distribution: device_allocations,
+      });
+
+      // Update or create device_campaigns records
+      for (const [deviceId, messageCount] of Object.entries(device_allocations)) {
+        await DeviceCampaign.upsert({
+          campaign_id: id,
+          device_id: parseInt(deviceId),
+          assigned_message_count: parseInt(messageCount),
+        });
+      }
+
+      res.json({
+        success: true,
+        message: 'Device allocation updated successfully',
+        device_allocations,
+      });
+
+    } catch (error) {
+      logger.error('Error updating device allocation:', error);
+      res.status(500).json({ error: 'Failed to update device allocation' });
+    }
+  }
+);
+
+// Get device allocation for a campaign
+router.get('/:id/device-allocation',
+  verifyToken,
+  [
+    param('id').isInt().withMessage('Campaign ID must be an integer'),
+  ],
+  validate,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      // Verify campaign belongs to user
+      const campaign = await Campaign.findOne({
+        where: {
+          id,
+          user_id: req.user.id,
+        },
+      });
+
+      if (!campaign) {
+        return res.status(404).json({ error: 'Campaign not found' });
+      }
+
+      // Get device campaigns with device info
+      const deviceCampaigns = await DeviceCampaign.findAll({
+        where: { campaign_id: id },
+        include: [{
+          model: Device,
+          attributes: ['id', 'device_label', 'phone_number', 'daily_limit', 'messages_sent_today'],
+        }],
+      });
+
+      res.json({
+        success: true,
+        device_allocations: campaign.device_message_distribution || {},
+        device_campaigns: deviceCampaigns.map(dc => ({
+          device_id: dc.device_id,
+          device_label: dc.Device.device_label,
+          phone_number: dc.Device.phone_number,
+          assigned_message_count: dc.assigned_message_count,
+          messages_sent_in_campaign: dc.messages_sent_in_campaign,
+          daily_limit: dc.Device.daily_limit,
+          messages_sent_today: dc.Device.messages_sent_today,
+          capacity_remaining: dc.Device.daily_limit - dc.Device.messages_sent_today,
+        })),
+      });
+
+    } catch (error) {
+      logger.error('Error fetching device allocation:', error);
+      res.status(500).json({ error: 'Failed to fetch device allocation' });
+    }
+  }
+);
+
+// ============================================================================
+// NEW: TIMING ANALYTICS ENDPOINTS
+// ============================================================================
+
+// Get timing analytics for a campaign
+router.get('/:id/timing-analytics',
+  verifyToken,
+  [
+    param('id').isInt().withMessage('Campaign ID must be an integer'),
+  ],
+  validate,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      // Verify campaign belongs to user
+      const campaign = await Campaign.findOne({
+        where: {
+          id,
+          user_id: req.user.id,
+        },
+      });
+
+      if (!campaign) {
+        return res.status(404).json({ error: 'Campaign not found' });
+      }
+
+      // Get device logs with timing data
+      const deviceLogs = await DeviceLog.findAll({
+        where: { 
+          campaign_id: id,
+          status: { [Op.in]: ['SENT', 'DELIVERED'] },
+          time_gap_ms: { [Op.not]: null },
+        },
+        order: [['sent_at', 'ASC']],
+        include: [{
+          model: Device,
+          attributes: ['id', 'device_label'],
+        }],
+      });
+
+      if (deviceLogs.length === 0) {
+        return res.json({
+          success: true,
+          timing_analytics: {
+            total_messages: 0,
+            avg_time_gap: 0,
+            min_time_gap: 0,
+            max_time_gap: 0,
+            avg_delivery_time: 0,
+            per_device_analytics: {},
+          },
+        });
+      }
+
+      // Calculate overall timing analytics
+      const timeGaps = deviceLogs.map(log => log.time_gap_ms).filter(gap => gap !== null);
+      const deliveryTimes = deviceLogs.map(log => log.delivery_time_ms).filter(time => time !== null);
+
+      const timingAnalytics = {
+        total_messages: deviceLogs.length,
+        avg_time_gap: timeGaps.length > 0 ? Math.round(timeGaps.reduce((a, b) => a + b, 0) / timeGaps.length) : 0,
+        min_time_gap: timeGaps.length > 0 ? Math.min(...timeGaps) : 0,
+        max_time_gap: timeGaps.length > 0 ? Math.max(...timeGaps) : 0,
+        avg_delivery_time: deliveryTimes.length > 0 ? Math.round(deliveryTimes.reduce((a, b) => a + b, 0) / deliveryTimes.length) : 0,
+        per_device_analytics: {},
+      };
+
+      // Calculate per-device analytics
+      const deviceGroups = deviceLogs.reduce((groups, log) => {
+        const deviceId = log.device_id;
+        if (!groups[deviceId]) {
+          groups[deviceId] = {
+            device_label: log.Device.device_label,
+            messages: [],
+          };
+        }
+        groups[deviceId].messages.push(log);
+        return groups;
+      }, {});
+
+      for (const [deviceId, data] of Object.entries(deviceGroups)) {
+        const deviceTimeGaps = data.messages.map(log => log.time_gap_ms).filter(gap => gap !== null);
+        const deviceDeliveryTimes = data.messages.map(log => log.delivery_time_ms).filter(time => time !== null);
+
+        timingAnalytics.per_device_analytics[deviceId] = {
+          device_label: data.device_label,
+          message_count: data.messages.length,
+          avg_time_gap: deviceTimeGaps.length > 0 ? Math.round(deviceTimeGaps.reduce((a, b) => a + b, 0) / deviceTimeGaps.length) : 0,
+          min_time_gap: deviceTimeGaps.length > 0 ? Math.min(...deviceTimeGaps) : 0,
+          max_time_gap: deviceTimeGaps.length > 0 ? Math.max(...deviceTimeGaps) : 0,
+          avg_delivery_time: deviceDeliveryTimes.length > 0 ? Math.round(deviceDeliveryTimes.reduce((a, b) => a + b, 0) / deviceDeliveryTimes.length) : 0,
+        };
+      }
+
+      // Update campaign timing analytics
+      await campaign.update({
+        timing_analytics: timingAnalytics,
+      });
+
+      res.json({
+        success: true,
+        timing_analytics: timingAnalytics,
+      });
+
+    } catch (error) {
+      logger.error('Error fetching timing analytics:', error);
+      res.status(500).json({ error: 'Failed to fetch timing analytics' });
+    }
+  }
+);
+
+// Update timing configuration for a campaign
+router.put('/:id/timing-config',
+  verifyToken,
+  [
+    param('id').isInt().withMessage('Campaign ID must be an integer'),
+    body('timing_config').isObject().withMessage('Timing config must be an object'),
+  ],
+  validate,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { timing_config } = req.body;
+
+      // Validate timing config structure
+      const validStrategies = ['CONSTANT', 'RANDOM', 'EXPONENTIAL_BACKOFF', 'CUSTOM'];
+      if (timing_config.strategy && !validStrategies.includes(timing_config.strategy)) {
+        return res.status(400).json({ error: 'Invalid timing strategy' });
+      }
+
+      // Verify campaign belongs to user
+      const campaign = await Campaign.findOne({
+        where: {
+          id,
+          user_id: req.user.id,
+        },
+      });
+
+      if (!campaign) {
+        return res.status(404).json({ error: 'Campaign not found' });
+      }
+
+      // Update campaign timing config
+      await campaign.update({
+        timing_config,
+      });
+
+      res.json({
+        success: true,
+        message: 'Timing configuration updated successfully',
+        timing_config,
+      });
+
+    } catch (error) {
+      logger.error('Error updating timing config:', error);
+      res.status(500).json({ error: 'Failed to update timing configuration' });
+    }
+  }
+);

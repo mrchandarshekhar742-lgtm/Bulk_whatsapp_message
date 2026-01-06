@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { MdSend, MdArrowBack } from 'react-icons/md';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../components/DashboardLayout';
+import DeviceAllocationForm from '../components/DeviceAllocationForm';
+import TimingConfigForm from '../components/TimingConfigForm';
 import api from '../api/client';
 
 export default function CreateCampaignPage() {
@@ -20,10 +22,30 @@ export default function CreateCampaignPage() {
     device_ids: [],
   });
 
+  // NEW: Device allocation and timing config
+  const [deviceAllocations, setDeviceAllocations] = useState({});
+  const [timingConfig, setTimingConfig] = useState({
+    strategy: 'RANDOM',
+    min_delay: 2000,
+    max_delay: 10000,
+    enable_smart_timing: true,
+  });
+  const [totalMessages, setTotalMessages] = useState(0);
+
   useEffect(() => {
     fetchExcelFiles();
     fetchDevices();
   }, []);
+
+  // NEW: Update total messages when input changes
+  useEffect(() => {
+    if (inputMode === 'manual') {
+      const count = manualNumbers.split('\n').filter(line => line.trim().length > 0).length;
+      setTotalMessages(count);
+    } else if (selectedExcel) {
+      setTotalMessages(selectedExcel.total_rows || 0);
+    }
+  }, [inputMode, manualNumbers, selectedExcel]);
 
   const fetchExcelFiles = async () => {
     try {
@@ -70,11 +92,25 @@ export default function CreateCampaignPage() {
       return;
     }
 
-
+    // Check device allocations
+    const totalAllocated = Object.values(deviceAllocations).reduce((sum, count) => sum + (count || 0), 0);
+    if (totalAllocated !== totalMessages && totalMessages > 0) {
+      const proceed = confirm(
+        `Device allocation (${totalAllocated}) doesn't match total messages (${totalMessages}). Continue anyway?`
+      );
+      if (!proceed) return;
+    }
 
     setLoading(true);
     try {
       let response;
+      
+      const campaignData = {
+        ...formData,
+        device_message_distribution: deviceAllocations,
+        timing_config: timingConfig,
+        rotation_mode: 'SMART_ROTATION',
+      };
       
       if (inputMode === 'manual') {
         // Parse manual numbers
@@ -89,15 +125,25 @@ export default function CreateCampaignPage() {
           phone_numbers: numbers,
           message: formData.message_template,
           device_ids: formData.device_ids,
+          device_message_distribution: deviceAllocations,
+          timing_config: timingConfig,
           rotation_mode: 'SMART_ROTATION',
         });
 
       } else {
         // Send Excel campaign
-        response = await api.post('/api/campaigns', {
-          ...formData,
-          rotation_mode: 'SMART_ROTATION',
-        });
+        response = await api.post('/api/campaigns', campaignData);
+      }
+      
+      // Update device allocations if campaign was created successfully
+      if (response.data.campaign?.id) {
+        try {
+          await api.put(`/api/campaigns/${response.data.campaign.id}/device-allocation`, {
+            device_allocations: deviceAllocations,
+          });
+        } catch (allocationError) {
+          console.warn('Failed to update device allocation:', allocationError);
+        }
       }
       
       // Show success message with details
@@ -329,6 +375,24 @@ export default function CreateCampaignPage() {
           </div>
 
 
+
+          {/* Device Allocation Form */}
+          {formData.device_ids.length > 0 && totalMessages > 0 && (
+            <DeviceAllocationForm
+              devices={devices.filter(d => formData.device_ids.includes(d.id))}
+              totalMessages={totalMessages}
+              onAllocationChange={setDeviceAllocations}
+              initialAllocation={deviceAllocations}
+            />
+          )}
+
+          {/* Timing Configuration Form */}
+          {formData.device_ids.length > 0 && (
+            <TimingConfigForm
+              onConfigChange={setTimingConfig}
+              initialConfig={timingConfig}
+            />
+          )}
 
           {/* Submit */}
           <div className="flex flex-col sm:flex-row gap-3 pt-2">

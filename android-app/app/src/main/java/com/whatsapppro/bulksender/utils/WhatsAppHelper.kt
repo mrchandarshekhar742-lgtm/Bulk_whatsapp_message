@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Build
 import android.util.Log
 import java.net.URLEncoder
+import java.net.URLDecoder
 
 object WhatsAppHelper {
     private const val TAG = "WhatsAppHelper"
@@ -15,10 +16,11 @@ object WhatsAppHelper {
     
     /**
      * Universal WhatsApp detection - Works on ALL Android versions (4.4 to 15+)
+     * Enhanced for latest Android with additional detection methods
      */
     fun isWhatsAppInstalled(context: Context): Boolean {
         return try {
-            Log.d(TAG, "Checking WhatsApp installation on Android ${Build.VERSION.SDK_INT}")
+            Log.d(TAG, "🔍 Checking WhatsApp installation on Android ${Build.VERSION.SDK_INT}")
             
             // Method 1: Direct package check (Works on all versions)
             if (isPackageInstalledDirect(context, WHATSAPP_PACKAGE)) {
@@ -53,6 +55,15 @@ object WhatsAppHelper {
             if (waLinkResult) {
                 Log.d(TAG, "✅ WhatsApp found via wa.me link handling")
                 return true
+            }
+            
+            // Method 6: Latest Android specific check
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val latestAndroidResult = isWhatsAppAvailableLatestAndroid(context)
+                if (latestAndroidResult) {
+                    Log.d(TAG, "✅ WhatsApp found via latest Android method")
+                    return true
+                }
             }
             
             Log.w(TAG, "❌ WhatsApp not detected by any method")
@@ -155,6 +166,60 @@ object WhatsAppHelper {
     }
     
     /**
+     * Latest Android specific WhatsApp detection (Android 12+)
+     */
+    private fun isWhatsAppAvailableLatestAndroid(context: Context): Boolean {
+        return try {
+            // Method 1: Check if we can resolve WhatsApp activities
+            val sendIntent = Intent().apply {
+                action = Intent.ACTION_SEND
+                type = "text/plain"
+                setPackage(WHATSAPP_PACKAGE)
+            }
+            
+            val activities = when {
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> {
+                    context.packageManager.queryIntentActivities(
+                        sendIntent,
+                        PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_DEFAULT_ONLY.toLong())
+                    )
+                }
+                else -> {
+                    @Suppress("DEPRECATION")
+                    context.packageManager.queryIntentActivities(sendIntent, PackageManager.MATCH_DEFAULT_ONLY)
+                }
+            }
+            
+            if (activities.isNotEmpty()) {
+                Log.d(TAG, "WhatsApp activities found: ${activities.size}")
+                return true
+            }
+            
+            // Method 2: Check via application info
+            val appInfo = when {
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> {
+                    context.packageManager.getApplicationInfo(
+                        WHATSAPP_PACKAGE,
+                        PackageManager.ApplicationInfoFlags.of(0)
+                    )
+                }
+                else -> {
+                    @Suppress("DEPRECATION")
+                    context.packageManager.getApplicationInfo(WHATSAPP_PACKAGE, 0)
+                }
+            }
+            
+            val isEnabled = appInfo.enabled
+            Log.d(TAG, "WhatsApp application info found, enabled: $isEnabled")
+            return isEnabled
+            
+        } catch (e: Exception) {
+            Log.w(TAG, "Latest Android detection failed: ${e.message}")
+            false
+        }
+    }
+    
+    /**
      * Check if device can handle wa.me links (Ultimate fallback)
      */
     private fun canHandleWaLinks(context: Context): Boolean {
@@ -187,6 +252,7 @@ object WhatsAppHelper {
     
     /**
      * Universal WhatsApp message sending - Works on ALL Android versions
+     * Enhanced for latest Android with additional methods
      */
     fun sendMessage(
         context: Context,
@@ -208,6 +274,7 @@ object WhatsAppHelper {
                 { sendMessageMethod1(context, cleanNumber, encodedMessage) }, // wa.me with package
                 { sendMessageMethod2(context, cleanNumber, encodedMessage) }, // wa.me generic
                 { sendMessageMethod6(context, cleanNumber, encodedMessage) }, // API link
+                { sendMessageMethod7(context, cleanNumber, encodedMessage) }, // Latest Android method
                 { sendMessageMethod3(context, cleanNumber, message) },        // SEND intent
                 { sendMessageMethod4(context, cleanNumber, message) },        // whatsapp:// scheme
                 { sendMessageMethod5(context, cleanNumber, message) }         // Generic chooser
@@ -351,6 +418,59 @@ object WhatsAppHelper {
             true
         } catch (e: Exception) {
             Log.w(TAG, "Method 6 failed: ${e.message}")
+            false
+        }
+    }
+    
+    /**
+     * Method 7: Latest Android optimized method (Android 12+)
+     */
+    private fun sendMessageMethod7(context: Context, phoneNumber: String, encodedMessage: String): Boolean {
+        return try {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+                return false
+            }
+            
+            // Create intent with explicit component resolution
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, URLDecoder.decode(encodedMessage, "UTF-8"))
+                putExtra("jid", "$phoneNumber@s.whatsapp.net")
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                
+                // Try to set explicit component for latest Android
+                val whatsappPackage = getWhatsAppPackage(context)
+                if (whatsappPackage != null) {
+                    setPackage(whatsappPackage)
+                    
+                    // For Android 12+, try to resolve the specific activity
+                    val resolveInfo = when {
+                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> {
+                            context.packageManager.resolveActivity(
+                                this,
+                                PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_DEFAULT_ONLY.toLong())
+                            )
+                        }
+                        else -> {
+                            @Suppress("DEPRECATION")
+                            context.packageManager.resolveActivity(this, PackageManager.MATCH_DEFAULT_ONLY)
+                        }
+                    }
+                    
+                    resolveInfo?.let { info ->
+                        component = android.content.ComponentName(
+                            info.activityInfo.packageName,
+                            info.activityInfo.name
+                        )
+                    }
+                }
+            }
+            
+            context.startActivity(intent)
+            Log.d(TAG, "Method 7: Latest Android method launched for $phoneNumber")
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "Method 7 failed: ${e.message}")
             false
         }
     }

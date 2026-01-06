@@ -5,6 +5,7 @@ const Device = require('./Device');
 const DeviceLog = require('./DeviceLog');
 const DeviceCommand = require('./DeviceCommand');
 const Campaign = require('./Campaign');
+const DeviceCampaign = require('./DeviceCampaign');
 
 // Define associations
 User.hasMany(ExcelRecord, { foreignKey: 'user_id', as: 'excel_records' });
@@ -32,6 +33,13 @@ DeviceLog.belongsTo(ExcelRecord, { foreignKey: 'excel_record_id' });
 Campaign.hasMany(DeviceLog, { foreignKey: 'campaign_id', as: 'device_logs' });
 DeviceLog.belongsTo(Campaign, { foreignKey: 'campaign_id' });
 
+// NEW: Device Campaign associations
+Campaign.hasMany(DeviceCampaign, { foreignKey: 'campaign_id', as: 'device_campaigns' });
+DeviceCampaign.belongsTo(Campaign, { foreignKey: 'campaign_id' });
+
+Device.hasMany(DeviceCampaign, { foreignKey: 'device_id', as: 'device_campaigns' });
+DeviceCampaign.belongsTo(Device, { foreignKey: 'device_id' });
+
 module.exports = {
   sequelize,
   User,
@@ -40,4 +48,5 @@ module.exports = {
   DeviceLog,
   DeviceCommand,
   Campaign,
+  DeviceCampaign,
 };

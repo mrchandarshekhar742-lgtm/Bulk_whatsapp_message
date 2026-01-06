@@ -4,7 +4,7 @@ const { sequelize } = require('./src/models');
 const logger = require('./src/utils/logger');
 const DeviceWebSocketManager = require('./src/services/DeviceWebSocketManager');
 
-const PORT = process.env.APP_PORT || 5000;
+const PORT = process.env.APP_PORT || 8080;
 
 // Validate required environment variables
 const requiredEnvVars = ['JWT_SECRET', 'JWT_REFRESH_SECRET', 'DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME'];

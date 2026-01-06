@@ -11,6 +11,7 @@ import ExcelPage from './pages/ExcelPage';
 import DevicesPage from './pages/DevicesPage';
 import CreateCampaignPage from './pages/CreateCampaignPage';
 import CampaignLogsPage from './pages/CampaignLogsPage';
+import TimingAnalyticsPage from './pages/TimingAnalyticsPage';
 
 export default function App() {
   return (
@@ -67,6 +68,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <CampaignLogsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/timing-analytics"
+            element={
+              <ProtectedRoute>
+                <TimingAnalyticsPage />
               </ProtectedRoute>
             }
           />

@@ -37,11 +37,22 @@ object PrefsHelper {
         val defaultUrl = "wss://www.wxon.in/ws/device"
         val savedUrl = getPrefs(context).getString(KEY_SERVER_URL, defaultUrl) ?: defaultUrl
 
-        // Force the URL to be in the correct, secure format
-        return if (savedUrl.startsWith("ws://") || !savedUrl.contains("www.")) {
-            savedUrl.replace("ws://", "wss://").replace("wxon.in", "www.wxon.in")
-        } else {
-            savedUrl
+        // Ensure the URL always has a proper scheme
+        return when {
+            savedUrl.startsWith("wss://") -> savedUrl
+            savedUrl.startsWith("ws://") -> savedUrl.replace("ws://", "wss://")
+            savedUrl.startsWith("https://") -> savedUrl.replace("https://", "wss://")
+            savedUrl.startsWith("http://") -> savedUrl.replace("http://", "wss://")
+            savedUrl.startsWith("www.") -> "wss://$savedUrl"
+            savedUrl.contains("wxon.in") && !savedUrl.startsWith("wss://") -> "wss://$savedUrl"
+            else -> {
+                // If no scheme found, add wss:// prefix
+                if (!savedUrl.contains("://")) {
+                    "wss://$savedUrl"
+                } else {
+                    savedUrl
+                }
+            }
         }
     }
     
