@@ -30,30 +30,12 @@ object PrefsHelper {
     
     // Server URL
     fun saveServerUrl(context: Context, url: String) {
-        getPrefs(context).edit().putString(KEY_SERVER_URL, url).apply()
+        // This function no longer does anything, but is kept to avoid breaking old code.
     }
     
     fun getServerUrl(context: Context): String {
-        val defaultUrl = "wss://www.wxon.in/ws/device"
-        val savedUrl = getPrefs(context).getString(KEY_SERVER_URL, defaultUrl) ?: defaultUrl
-
-        // Ensure the URL always has a proper scheme
-        return when {
-            savedUrl.startsWith("wss://") -> savedUrl
-            savedUrl.startsWith("ws://") -> savedUrl.replace("ws://", "wss://")
-            savedUrl.startsWith("https://") -> savedUrl.replace("https://", "wss://")
-            savedUrl.startsWith("http://") -> savedUrl.replace("http://", "wss://")
-            savedUrl.startsWith("www.") -> "wss://$savedUrl"
-            savedUrl.contains("wxon.in") && !savedUrl.startsWith("wss://") -> "wss://$savedUrl"
-            else -> {
-                // If no scheme found, add wss:// prefix
-                if (!savedUrl.contains("://")) {
-                    "wss://$savedUrl"
-                } else {
-                    savedUrl
-                }
-            }
-        }
+        // Always return the one, correct, hardcoded URL.
+        return "wss://www.wxon.in/ws/device"
     }
     
     // Auto Start

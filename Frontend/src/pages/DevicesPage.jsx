@@ -10,6 +10,11 @@ export default function DevicesPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [newDevice, setNewDevice] = useState({ device_label: '', phone_number: '' });
   const [deviceToken, setDeviceToken] = useState(null);
+  
+  // NEW: Device performance summary
+  const [selectedDevice, setSelectedDevice] = useState(null);
+  const [performanceSummary, setPerformanceSummary] = useState(null);
+  const [loadingPerformance, setLoadingPerformance] = useState(false);
 
   useEffect(() => {
     fetchDevices();
@@ -27,6 +32,23 @@ export default function DevicesPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchPerformanceSummary = async (deviceId) => {
+    setLoadingPerformance(true);
+    try {
+      const response = await api.get(`/api/devices/${deviceId}/performance-summary`);
+      setPerformanceSummary(response.data.performance_summary);
+    } catch (error) {
+      console.error('Error fetching performance summary:', error);
+    } finally {
+      setLoadingPerformance(false);
+    }
+  };
+
+  const handleViewPerformance = (device) => {
+    setSelectedDevice(device);
+    fetchPerformanceSummary(device.id);
   };
 
   const handleAddDevice = async (e) => {
@@ -400,30 +422,7 @@ export default function DevicesPage() {
           </>
         )}
       </AnimatePresence>
-    </DashboardLayout>
-  );
-}
-  // NEW: Device performance summary
-  const [selectedDevice, setSelectedDevice] = useState(null);
-  const [performanceSummary, setPerformanceSummary] = useState(null);
-  const [loadingPerformance, setLoadingPerformance] = useState(false);
 
-  const fetchPerformanceSummary = async (deviceId) => {
-    setLoadingPerformance(true);
-    try {
-      const response = await api.get(`/api/devices/${deviceId}/performance-summary`);
-      setPerformanceSummary(response.data.performance_summary);
-    } catch (error) {
-      console.error('Error fetching performance summary:', error);
-    } finally {
-      setLoadingPerformance(false);
-    }
-  };
-
-  const handleViewPerformance = (device) => {
-    setSelectedDevice(device);
-    fetchPerformanceSummary(device.id);
-  };
       {/* Performance Summary Modal */}
       <AnimatePresence>
         {selectedDevice && (
@@ -586,3 +585,6 @@ export default function DevicesPage() {
           </>
         )}
       </AnimatePresence>
+    </DashboardLayout>
+  );
+}
