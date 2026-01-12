@@ -4,7 +4,7 @@ import DashboardLayout from '../components/DashboardLayout';
 import { motion } from 'framer-motion';
 import { StatCard } from '../components/StatCard';
 import { DataTable } from '../components/DataTable';
-import api from '../api/client';
+import { apiClient } from '../api/client';
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
@@ -20,7 +20,7 @@ export default function Dashboard() {
 
   const fetchStats = async () => {
     try {
-      const response = await api.get('/api/campaigns/stats');
+      const response = await apiClient.get('/campaigns/stats');
       setStats(response.data);
     } catch (error) {
       console.error('Error fetching stats:', error);
@@ -29,7 +29,7 @@ export default function Dashboard() {
 
   const fetchRecentCampaigns = async () => {
     try {
-      const response = await api.get('/api/campaigns/logs?limit=5');
+      const response = await apiClient.get('/campaigns/logs?limit=5');
       setRecentCampaigns(response.data.logs || []);
     } catch (error) {
       console.error('Error fetching recent campaigns:', error);

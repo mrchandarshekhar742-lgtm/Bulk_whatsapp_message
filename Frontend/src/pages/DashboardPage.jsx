@@ -9,10 +9,14 @@ import {
   MdTrendingUp,
   MdSpeed,
   MdBattery90,
-  MdSignalWifi4Bar
+  MdSignalWifi4Bar,
+  MdHealthAndSafety,
+  MdInsights,
+  MdAutoAwesome,
+  MdWarning
 } from 'react-icons/md';
 import DashboardLayout from '../components/DashboardLayout';
-import api from '../api/client';
+import { apiClient } from '../api/client';
 
 export default function DashboardPage() {
   const [stats, setStats] = useState({
@@ -26,6 +30,8 @@ export default function DashboardPage() {
   
   const [devices, setDevices] = useState([]);
   const [recentLogs, setRecentLogs] = useState([]);
+  const [healthSummary, setHealthSummary] = useState(null);
+  const [campaignInsights, setCampaignInsights] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -37,15 +43,19 @@ export default function DashboardPage() {
 
   const fetchDashboardData = async () => {
     try {
-      const [statsRes, devicesRes, logsRes] = await Promise.all([
-        api.get('/api/campaigns/stats'),
-        api.get('/api/devices'),
-        api.get('/api/campaigns/logs?limit=5')
+      const [statsRes, devicesRes, logsRes, healthRes, insightsRes] = await Promise.all([
+        apiClient.get('/campaigns/stats'),
+        apiClient.get('/devices'),
+        apiClient.get('/campaigns/logs?limit=5'),
+        apiClient.get('/devices/health-summary').catch(() => ({ data: null })),
+        apiClient.get('/campaigns/insights').catch(() => ({ data: null }))
       ]);
       
       setStats(statsRes.data.stats);
       setDevices(devicesRes.data.devices);
       setRecentLogs(logsRes.data.logs);
+      setHealthSummary(healthRes.data);
+      setCampaignInsights(insightsRes.data);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
@@ -61,6 +71,22 @@ export default function DashboardPage() {
   const totalCapacity = devices.reduce((sum, device) => 
     sum + (device.daily_limit - device.messages_sent_today), 0
   );
+
+  const getHealthColor = (score) => {
+    if (score >= 90) return 'text-green-600 bg-green-100';
+    if (score >= 75) return 'text-blue-600 bg-blue-100';
+    if (score >= 60) return 'text-yellow-600 bg-yellow-100';
+    if (score >= 40) return 'text-orange-600 bg-orange-100';
+    return 'text-red-600 bg-red-100';
+  };
+
+  const getHealthStatus = (score) => {
+    if (score >= 90) return 'EXCELLENT';
+    if (score >= 75) return 'GOOD';
+    if (score >= 60) return 'FAIR';
+    if (score >= 40) return 'POOR';
+    return 'CRITICAL';
+  };
 
   if (loading) {
     return (

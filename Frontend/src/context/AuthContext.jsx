@@ -37,7 +37,7 @@ export function AuthProvider({ children }) {
           try {
             const refreshToken = localStorage.getItem('refresh_token');
             if (refreshToken) {
-              const response = await axios.post('/api/auth/refresh-token', { refresh_token: refreshToken });
+              const response = await apiClient.post('/auth/refresh-token', { refresh_token: refreshToken });
               const newToken = response.data.access_token;
               localStorage.setItem('access_token', newToken);
               setToken(newToken);
@@ -62,8 +62,8 @@ export function AuthProvider({ children }) {
     const loadUser = async () => {
       if (token) {
         try {
-          // Fetch user profile from /api/auth/me endpoint
-          const response = await apiClient.get('/api/auth/me');
+          // Fetch user profile from /auth/me endpoint
+          const response = await apiClient.get('/auth/me');
           setUser(response.data.user || response.data);
         } catch (error) {
           console.error('Failed to load user:', error.response?.data || error.message);
@@ -79,7 +79,7 @@ export function AuthProvider({ children }) {
   }, [token]);
 
   const login = async (email, password) => {
-    const response = await axios.post('/api/auth/login', { email, password });
+    const response = await apiClient.post('/auth/login', { email, password });
     localStorage.setItem('access_token', response.data.access_token);
     localStorage.setItem('refresh_token', response.data.refresh_token);
     setToken(response.data.access_token);
@@ -90,7 +90,7 @@ export function AuthProvider({ children }) {
   const register = async (data) => {
     try {
       console.log('Registering user');
-      const response = await axios.post('/api/auth/register', data);
+      const response = await apiClient.post('/auth/register', data);
       // Do not log sensitive token details
       const { access_token, refresh_token } = response.data;
       localStorage.setItem('access_token', access_token);

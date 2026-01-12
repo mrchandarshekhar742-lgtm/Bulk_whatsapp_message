@@ -284,92 +284,9 @@ router.get('/:id', verifyToken, async (req, res) => {
   }
 });
 
-// Get Excel rows with pagination
-router.get('/:id/rows', verifyToken, async (req, res) => {
-  try {
-    const { page = 1, limit = 50, status } = req.query;
-    const offset = (page - 1) * limit;
-
-    const whereClause = { excel_record_id: req.params.id };
-    if (status) {
-      whereClause.status = status;
-    }
-
-    // Verify user owns this record
-    const record = await ExcelRecord.findOne({
-      where: { 
-        id: req.params.id,
-        user_id: req.user.id 
-      }
-    });
-
-    if (!record) {
-      return res.status(404).json({ error: 'Record not found' });
-    }
-
-    const { count, rows } = await ExcelRow.findAndCountAll({
-      where: whereClause,
-      limit: parseInt(limit),
-      offset: parseInt(offset),
-      order: [['row_number', 'ASC']]
-    });
-
-    res.json({
-      success: true,
-      rows: rows,
-      pagination: {
-        total: count,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        pages: Math.ceil(count / limit)
-      }
-    });
-  } catch (error) {
-    logger.error('Error fetching Excel rows:', error);
-    res.status(500).json({ error: 'Failed to fetch rows' });
-  }
-});
-
-// Delete Excel record
-router.delete('/:id', verifyToken, async (req, res) => {
-  try {
-    const record = await ExcelRecord.findOne({
-      where: { 
-        id: req.params.id,
-        user_id: req.user.id 
-      }
-    });
-
-    if (!record) {
-      return res.status(404).json({ error: 'Record not found' });
-    }
-
-    // Delete associated rows first
-    await ExcelRow.destroy({
-      where: { excel_record_id: record.id }
-    });
-
-    // Delete file if it exists
-    if (fs.existsSync(record.file_path)) {
-      fs.unlinkSync(record.file_path);
-    }
-
-    // Delete record
-    await record.destroy();
-
-    logger.info(`Excel record deleted`, {
-      userId: req.user.id,
-      recordId: record.id
-    });
-
-    res.json({
-      success: true,
-      message: 'Record deleted successfully'
-    });
-  } catch (error) {
-    logger.error('Error deleting Excel record:', error);
-    res.status(500).json({ error: 'Failed to delete record' });
-  }
+// Test endpoint
+router.get('/test', (req, res) => {
+  res.json({ message: 'Excel routes working!' });
 });
 
 module.exports = router;

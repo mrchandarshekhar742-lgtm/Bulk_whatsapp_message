@@ -11,7 +11,7 @@ import {
   MdSignalCellularAlt
 } from 'react-icons/md';
 import DashboardLayout from '../components/DashboardLayout';
-import api from '../api/client';
+import { apiClient } from '../api/client';
 
 export default function TimingAnalyticsPage() {
   const [loading, setLoading] = useState(true);
@@ -42,8 +42,8 @@ export default function TimingAnalyticsPage() {
   const fetchInitialData = async () => {
     try {
       const [campaignsRes, devicesRes] = await Promise.all([
-        api.get('/api/campaigns'),
-        api.get('/api/devices')
+        apiClient.get('/campaigns'),
+        apiClient.get('/devices')
       ]);
       
       setCampaigns(campaignsRes.data.campaigns || []);
@@ -62,7 +62,7 @@ export default function TimingAnalyticsPage() {
 
   const fetchCampaignTiming = async (campaignId) => {
     try {
-      const response = await api.get(`/api/campaigns/${campaignId}/timing-analytics`);
+      const response = await apiClient.get(`/campaigns/${campaignId}/timing-analytics`);
       setTimingData(response.data.timing_analytics);
     } catch (error) {
       console.error('Error fetching campaign timing:', error);
@@ -71,7 +71,7 @@ export default function TimingAnalyticsPage() {
 
   const fetchDeviceTiming = async (deviceId) => {
     try {
-      const response = await api.get(`/api/devices/${deviceId}/timing-analytics?days=${timeRange}`);
+      const response = await apiClient.get(`/devices/${deviceId}/timing-analytics?days=${timeRange}`);
       setDeviceTimingData(response.data.device_timing_analytics);
     } catch (error) {
       console.error('Error fetching device timing:', error);

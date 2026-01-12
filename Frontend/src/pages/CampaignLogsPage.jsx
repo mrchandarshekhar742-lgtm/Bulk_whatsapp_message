@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { MdRefresh, MdFilterList, MdSend, MdError, MdSchedule, MdCheckCircle } from 'react-icons/md';
 import DashboardLayout from '../components/DashboardLayout';
-import api from '../api/client';
+import { apiClient } from '../api/client';
 
 export default function CampaignLogsPage() {
   const [logs, setLogs] = useState([]);
@@ -32,14 +32,14 @@ export default function CampaignLogsPage() {
     fetchStats();
   }, [filters, pagination.page]);
 
-  // Auto-refresh every 20 seconds (reduced frequency to prevent rate limiting)
+  // Auto-refresh every 30 seconds (reduced frequency to prevent rate limiting)
   useEffect(() => {
     if (!autoRefresh) return;
     
     const interval = setInterval(() => {
       fetchLogs();
       fetchStats();
-    }, 20000); // Changed from 10000 to 20000 (20 seconds)
+    }, 30000); // Changed from 20000 to 30000 (30 seconds)
 
     return () => clearInterval(interval);
   }, [autoRefresh, filters, pagination.page]);
@@ -63,7 +63,7 @@ export default function CampaignLogsPage() {
         params.append('excel_record_id', filters.excel_record_id);
       }
       
-      const response = await api.get(`/api/campaigns/logs?${params}`);
+      const response = await apiClient.get(`/campaigns/logs?${params}`);
       setLogs(response.data.logs);
       setPagination(prev => ({ ...prev, ...response.data.pagination }));
     } catch (error) {
@@ -75,7 +75,7 @@ export default function CampaignLogsPage() {
 
   const fetchDevices = async () => {
     try {
-      const response = await api.get('/api/devices');
+      const response = await apiClient.get('/devices');
       setDevices(response.data.devices);
     } catch (error) {
       console.error('Error fetching devices:', error);
@@ -84,7 +84,7 @@ export default function CampaignLogsPage() {
 
   const fetchExcelFiles = async () => {
     try {
-      const response = await api.get('/api/excel');
+      const response = await apiClient.get('/excel');
       setExcelFiles(response.data.records || []);
     } catch (error) {
       console.error('Error fetching Excel files:', error);
@@ -93,7 +93,7 @@ export default function CampaignLogsPage() {
 
   const fetchStats = async () => {
     try {
-      const response = await api.get('/api/campaigns/stats');
+      const response = await apiClient.get('/campaigns/stats');
       setStats(response.data.stats);
     } catch (error) {
       console.error('Error fetching stats:', error);
@@ -218,7 +218,7 @@ export default function CampaignLogsPage() {
         <div>
           <p className="text-gray-600 text-sm sm:text-base">View all message sending logs</p>
           <p className="text-xs text-gray-500 mt-1">
-            Auto-refresh: {autoRefresh ? 'ON' : 'OFF'} • Updates every 10 seconds
+            Auto-refresh: {autoRefresh ? 'ON' : 'OFF'} • Updates every 30 seconds
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -308,13 +308,12 @@ export default function CampaignLogsPage() {
                 <th className="px-4 py-3 text-left text-gray-700 text-xs font-semibold uppercase tracking-wider">Message</th>
                 <th className="px-4 py-3 text-left text-gray-700 text-xs font-semibold uppercase tracking-wider">Status</th>
                 <th className="px-4 py-3 text-left text-gray-700 text-xs font-semibold uppercase tracking-wider">Time</th>
-                <th className="px-4 py-3 text-left text-gray-700 text-xs font-semibold uppercase tracking-wider">IP</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {loading ? (
                 <tr>
-                  <td colSpan="6" className="px-4 py-12 text-center">
+                  <td colSpan="5" className="px-4 py-12 text-center">
                     <div className="flex items-center justify-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
                     </div>
@@ -322,7 +321,7 @@ export default function CampaignLogsPage() {
                 </tr>
               ) : logs.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="px-4 py-12 text-center text-gray-500">
+                  <td colSpan="5" className="px-4 py-12 text-center text-gray-500">
                     No logs found
                   </td>
                 </tr>
@@ -351,9 +350,6 @@ export default function CampaignLogsPage() {
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs">
                       {formatDate(log.created_at)}
-                    </td>
-                    <td className="px-4 py-3 text-gray-400 text-xs font-mono">
-                      {log.device_ip || '--'}
                     </td>
                   </motion.tr>
                 ))
@@ -426,7 +422,6 @@ export default function CampaignLogsPage() {
               </div>
               <div className="flex justify-between items-center text-xs text-gray-500">
                 <span>{formatDate(log.created_at)}</span>
-                <span className="font-mono">{log.device_ip || '--'}</span>
               </div>
             </motion.div>
           ))

@@ -2,13 +2,13 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MdPhoneAndroid, MdAdd, MdDelete, MdRefresh, MdSignalCellularAlt, MdClose, MdTimer, MdBarChart } from 'react-icons/md';
 import DashboardLayout from '../components/DashboardLayout';
-import api from '../api/client';
+import { apiClient } from '../api/client';
 
 export default function DevicesPage() {
   const [devices, setDevices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newDevice, setNewDevice] = useState({ device_label: '', phone_number: '' });
+  const [newDevice, setNewDevice] = useState({ device_label: '', phone_number: '', daily_limit: 50 });
   const [deviceToken, setDeviceToken] = useState(null);
   
   // NEW: Device performance summary
@@ -25,7 +25,7 @@ export default function DevicesPage() {
 
   const fetchDevices = async () => {
     try {
-      const response = await api.get('/api/devices');
+      const response = await apiClient.get('/devices');
       setDevices(response.data.devices);
     } catch (error) {
       console.error('Error fetching devices:', error);
@@ -37,7 +37,7 @@ export default function DevicesPage() {
   const fetchPerformanceSummary = async (deviceId) => {
     setLoadingPerformance(true);
     try {
-      const response = await api.get(`/api/devices/${deviceId}/performance-summary`);
+      const response = await apiClient.get(`/devices/${deviceId}/performance-summary`);
       setPerformanceSummary(response.data.performance_summary);
     } catch (error) {
       console.error('Error fetching performance summary:', error);
@@ -54,9 +54,9 @@ export default function DevicesPage() {
   const handleAddDevice = async (e) => {
     e.preventDefault();
     try {
-      const response = await api.post('/api/devices', newDevice);
+      const response = await apiClient.post('/devices', newDevice);
       setDeviceToken(response.data.device.device_token);
-      setNewDevice({ device_label: '', phone_number: '' });
+      setNewDevice({ device_label: '', phone_number: '', daily_limit: 50 });
       fetchDevices();
     } catch (error) {
       console.error('Error adding device:', error);
@@ -68,7 +68,7 @@ export default function DevicesPage() {
     if (!confirm('Are you sure you want to delete this device?')) return;
     
     try {
-      await api.delete(`/api/devices/${id}`);
+      await apiClient.delete(`/devices/${id}`);
       fetchDevices();
     } catch (error) {
       console.error('Error deleting device:', error);
@@ -78,7 +78,7 @@ export default function DevicesPage() {
 
   const handleToggleActive = async (device) => {
     try {
-      await api.put(`/api/devices/${device.id}`, {
+      await apiClient.put(`/devices/${device.id}`, {
         is_active: !device.is_active,
       });
       fetchDevices();
@@ -390,7 +390,7 @@ export default function DevicesPage() {
                         required
                       />
                     </div>
-                    <div className="mb-5">
+                    <div className="mb-4">
                       <label className="block text-gray-700 font-medium mb-2 text-sm">Phone Number (Optional)</label>
                       <input
                         type="text"
@@ -399,6 +399,20 @@ export default function DevicesPage() {
                         className="w-full px-4 py-2.5 bg-gray-50 text-gray-900 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
                         placeholder="+1234567890"
                       />
+                    </div>
+                    <div className="mb-5">
+                      <label className="block text-gray-700 font-medium mb-2 text-sm">Daily Message Limit *</label>
+                      <input
+                        type="number"
+                        value={newDevice.daily_limit}
+                        onChange={(e) => setNewDevice({ ...newDevice, daily_limit: parseInt(e.target.value) || 50 })}
+                        className="w-full px-4 py-2.5 bg-gray-50 text-gray-900 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                        placeholder="50"
+                        min="1"
+                        max="1000"
+                        required
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Maximum messages this device can send per day (1-1000)</p>
                     </div>
                     <div className="flex gap-3">
                       <button

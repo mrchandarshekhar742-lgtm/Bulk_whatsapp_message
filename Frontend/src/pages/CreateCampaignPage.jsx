@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../components/DashboardLayout';
 import DeviceAllocationForm from '../components/DeviceAllocationForm';
 import TimingConfigForm from '../components/TimingConfigForm';
-import api from '../api/client';
+import { apiClient } from '../api/client';
 
 export default function CreateCampaignPage() {
   const navigate = useNavigate();
@@ -49,7 +49,7 @@ export default function CreateCampaignPage() {
 
   const fetchExcelFiles = async () => {
     try {
-      const response = await api.get('/api/excel');
+      const response = await apiClient.get('/excel');
       setExcelFiles(response.data.records || []);
     } catch (error) {
       console.error('Error fetching Excel files:', error);
@@ -58,7 +58,7 @@ export default function CreateCampaignPage() {
 
   const fetchDevices = async () => {
     try {
-      const response = await api.get('/api/devices');
+      const response = await apiClient.get('/devices');
       setDevices(response.data.devices.filter(d => d.is_active));
     } catch (error) {
       console.error('Error fetching devices:', error);
@@ -120,7 +120,7 @@ export default function CreateCampaignPage() {
           .filter(line => line.length > 0);
         
         // Send manual campaign
-        response = await api.post('/api/campaigns/manual', {
+        response = await apiClient.post('/campaigns/manual', {
           name: formData.name,
           phone_numbers: numbers,
           message: formData.message_template,
@@ -132,13 +132,13 @@ export default function CreateCampaignPage() {
 
       } else {
         // Send Excel campaign
-        response = await api.post('/api/campaigns', campaignData);
+        response = await apiClient.post('/campaigns', campaignData);
       }
       
       // Update device allocations if campaign was created successfully
       if (response.data.campaign?.id) {
         try {
-          await api.put(`/api/campaigns/${response.data.campaign.id}/device-allocation`, {
+          await apiClient.put(`/campaigns/${response.data.campaign.id}/device-allocation`, {
             device_allocations: deviceAllocations,
           });
         } catch (allocationError) {
