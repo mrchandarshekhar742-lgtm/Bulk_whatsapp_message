@@ -117,8 +117,9 @@ const Campaign = sequelize.define('Campaign', {
 }, {
   tableName: 'campaigns',
   timestamps: true,
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  underscored: true,
+  createdAt: 'created_at',
+  updatedAt: 'updated_at'
 });
 
 module.exports = Campaign;
