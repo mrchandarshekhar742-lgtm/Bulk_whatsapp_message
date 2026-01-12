@@ -14,7 +14,7 @@ export default function ExcelPage(){
   const fetchList = async () => {
     try{
       setLoading(true);
-      const resp = await apiClient.get('/api/excel');
+      const resp = await apiClient.get('/excel');
       setRecords(resp.data.records || []);
     }catch(e){
       console.error('Failed to fetch excel records', e);
@@ -42,7 +42,7 @@ export default function ExcelPage(){
     try{
       setUploading(true);
       setMessage('');
-      await apiClient.post('/api/excel/upload', form, { 
+      await apiClient.post('/excel/upload', form, { 
         headers: { 'Content-Type': 'multipart/form-data' } 
       });
       setMessage('✓ File uploaded successfully');
@@ -60,7 +60,7 @@ export default function ExcelPage(){
   const handleDelete = async (id, fileName) =>{
     if(!confirm(`Delete "${fileName}"?`)) return;
     try{
-      await apiClient.delete(`/api/excel/${id}`);
+      await apiClient.delete(`/excel/${id}`);
       setMessage('✓ File deleted');
       fetchList();
       setTimeout(() => setMessage(''), 3000);
@@ -72,7 +72,7 @@ export default function ExcelPage(){
 
   const handleExport = async (id, fileName) => {
     try {
-      const response = await apiClient.get(`/api/excel/${id}/export`, {
+      const response = await apiClient.get(`/excel/${id}/export`, {
         responseType: 'blob'
       });
       const url = window.URL.createObjectURL(new Blob([response.data]));

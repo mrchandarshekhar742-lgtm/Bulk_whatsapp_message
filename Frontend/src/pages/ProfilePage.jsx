@@ -43,7 +43,7 @@ export default function ProfilePage() {
     setMessage('');
 
     try {
-      await apiClient.put('/api/auth/profile', {
+      await apiClient.put('/auth/profile', {
         first_name: formData.firstName,
         last_name: formData.lastName,
         company: formData.company,

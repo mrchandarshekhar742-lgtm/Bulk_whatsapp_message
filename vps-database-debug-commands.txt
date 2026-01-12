@@ -1,0 +1,72 @@
+# VPS DATABASE DEBUG AND FIX COMMANDS
+# Run these commands one by one on your VPS terminal
+
+# 1. First, let's check the backend logs to see the exact database errors
+cd /var/www/whatsapp-pro/Bulk_whatsapp_message/backend
+pm2 logs whatsapp-pro --lines 50
+
+# 2. Check if backend is running and what errors it shows
+curl http://localhost:8080/health
+
+# 3. Test database connection directly
+mysql -u root -p -e "USE bulk_whatsapp_sms; SHOW TABLES;"
+
+# 4. Check if the database tables exist and their structure
+mysql -u root -p -e "USE bulk_whatsapp_sms; DESCRIBE campaigns;"
+mysql -u root -p -e "USE bulk_whatsapp_sms; DESCRIBE device_logs;"
+mysql -u root -p -e "USE bulk_whatsapp_sms; DESCRIBE excel_records;"
+
+# 5. Check if there are any missing columns causing the 500 errors
+mysql -u root -p -e "USE bulk_whatsapp_sms; SHOW COLUMNS FROM campaigns LIKE '%created%';"
+mysql -u root -p -e "USE bulk_whatsapp_sms; SHOW COLUMNS FROM device_logs LIKE '%created%';"
+
+# 6. If tables don't exist or have wrong structure, let's recreate them
+# First backup existing data (if any)
+mysqldump -u root -p bulk_whatsapp_sms > /tmp/backup_$(date +%Y%m%d_%H%M%S).sql
+
+# 7. Check the complete database schema
+mysql -u root -p -e "USE bulk_whatsapp_sms; SHOW CREATE TABLE campaigns;"
+
+# 8. Let's also check what's in the backend error logs
+tail -f /var/www/whatsapp-pro/Bulk_whatsapp_message/backend/logs/app.log
+
+# 9. Test the API endpoints directly to see exact error messages
+curl -X GET "http://localhost:8080/api/campaigns/logs?limit=5" -H "Content-Type: application/json"
+
+# 10. Check if the models are loading correctly
+cd /var/www/whatsapp-pro/Bulk_whatsapp_message/backend
+node -e "
+try {
+  const models = require('./src/models');
+  console.log('✓ Models loaded successfully');
+  console.log('Available models:', Object.keys(models));
+} catch(error) {
+  console.log('✗ Model loading failed:', error.message);
+  console.log('Stack:', error.stack);
+}
+"
+
+# 11. Test database connection from Node.js
+node -e "
+const { sequelize } = require('./src/models');
+sequelize.authenticate()
+  .then(() => console.log('✓ Database connection successful'))
+  .catch(err => console.log('✗ Database connection failed:', err.message));
+"
+
+# 12. If database connection works, test table access
+node -e "
+const { Campaign, DeviceLog, ExcelRecord } = require('./src/models');
+Promise.all([
+  Campaign.findAll({ limit: 1 }),
+  DeviceLog.findAll({ limit: 1 }),
+  ExcelRecord.findAll({ limit: 1 })
+]).then(() => {
+  console.log('✓ All tables accessible');
+}).catch(err => {
+  console.log('✗ Table access failed:', err.message);
+});
+"
+
+# AFTER RUNNING THESE COMMANDS, SEND ME THE OUTPUT
+# I'll create the exact fix based on what we find

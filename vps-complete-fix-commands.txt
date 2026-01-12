@@ -1,0 +1,288 @@
+# COMPLETE VPS FIX COMMANDS
+# Run these commands step by step on your VPS terminal
+
+echo "============================================================================"
+echo "WHATSAPP PRO - COMPLETE DATABASE AND API FIX"
+echo "============================================================================"
+
+# 1. Navigate to project directory
+cd /var/www/whatsapp-pro/Bulk_whatsapp_message
+
+# 2. Pull latest code (with double /api fixes)
+echo "Pulling latest code with API path fixes..."
+git pull origin main
+
+# 3. Check backend logs first to see current errors
+echo "Checking current backend logs..."
+pm2 logs whatsapp-pro --lines 20
+
+# 4. Go to backend directory
+cd backend
+
+# 5. Install dependencies
+echo "Installing dependencies..."
+npm install --production
+
+# 6. Test database connection
+echo "Testing database connection..."
+mysql -u root -p -e "USE bulk_whatsapp_sms; SHOW TABLES;"
+
+# 7. Check if tables exist and their structure
+echo "Checking table structures..."
+mysql -u root -p -e "USE bulk_whatsapp_sms; DESCRIBE campaigns;" 2>/dev/null || echo "campaigns table missing or has issues"
+mysql -u root -p -e "USE bulk_whatsapp_sms; DESCRIBE device_logs;" 2>/dev/null || echo "device_logs table missing or has issues"
+mysql -u root -p -e "USE bulk_whatsapp_sms; DESCRIBE excel_records;" 2>/dev/null || echo "excel_records table missing or has issues"
+
+# 8. If tables have issues, let's recreate the database schema
+echo "Checking if we need to recreate database schema..."
+
+# First, backup existing data
+mysqldump -u root -p bulk_whatsapp_sms > /tmp/backup_$(date +%Y%m%d_%H%M%S).sql 2>/dev/null || echo "No existing data to backup"
+
+# 9. Create/recreate the database with proper schema
+mysql -u root -p << 'EOF'
+DROP DATABASE IF EXISTS bulk_whatsapp_sms;
+CREATE DATABASE bulk_whatsapp_sms CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE bulk_whatsapp_sms;
+
+-- Users table
+CREATE TABLE users (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  email VARCHAR(255) UNIQUE NOT NULL,
+  password VARCHAR(255) NOT NULL,
+  first_name VARCHAR(100),
+  last_name VARCHAR(100),
+  company_name VARCHAR(255),
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Devices table
+CREATE TABLE devices (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  user_id INT NOT NULL,
+  device_label VARCHAR(100) NOT NULL,
+  phone_number VARCHAR(20),
+  device_ip VARCHAR(45),
+  device_token VARCHAR(255) UNIQUE NOT NULL,
+  is_online BOOLEAN DEFAULT FALSE,
+  is_active BOOLEAN DEFAULT TRUE,
+  warmup_stage ENUM('STAGE_1', 'STAGE_2', 'STAGE_3', 'STAGE_4') DEFAULT 'STAGE_1',
+  warmup_started_at DATE,
+  messages_sent_today INT DEFAULT 0,
+  daily_limit INT DEFAULT 15,
+  battery_level INT,
+  network_type VARCHAR(50),
+  android_version VARCHAR(50),
+  app_version VARCHAR(50),
+  last_seen TIMESTAMP,
+  last_message_sent_at TIMESTAMP,
+  total_messages_sent INT DEFAULT 0,
+  total_messages_failed INT DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- Excel records table
+CREATE TABLE excel_records (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  filename VARCHAR(255),
+  original_name VARCHAR(255),
+  file_path VARCHAR(1000) NOT NULL,
+  file_size INT DEFAULT 0,
+  total_records INT DEFAULT 0,
+  processed_records INT DEFAULT 0,
+  status VARCHAR(50),
+  user_id INT NOT NULL,
+  has_duration_column BOOLEAN DEFAULT FALSE,
+  has_message_column BOOLEAN DEFAULT FALSE,
+  default_duration INT DEFAULT 30,
+  default_message TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- Excel rows table
+CREATE TABLE excel_rows (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  excel_record_id INT NOT NULL,
+  phone_number VARCHAR(20) NOT NULL,
+  duration INT DEFAULT 30,
+  message TEXT,
+  status ENUM('PENDING', 'SENT', 'FAILED', 'SKIPPED') DEFAULT 'PENDING',
+  sent_at TIMESTAMP,
+  error_message TEXT,
+  device_id INT,
+  row_number INT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (excel_record_id) REFERENCES excel_records(id) ON DELETE CASCADE,
+  FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE SET NULL
+);
+
+-- Campaigns table
+CREATE TABLE campaigns (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  user_id INT NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  description TEXT,
+  excel_record_id INT,
+  campaign_type ENUM('STANDARD', 'SCHEDULED', 'RECURRING') DEFAULT 'STANDARD',
+  status ENUM('DRAFT', 'PENDING', 'RUNNING', 'COMPLETED', 'PAUSED', 'CANCELLED') DEFAULT 'DRAFT',
+  message_content TEXT NOT NULL,
+  total_contacts INT DEFAULT 0,
+  sent_count INT DEFAULT 0,
+  failed_count INT DEFAULT 0,
+  pending_count INT DEFAULT 0,
+  rotation_mode ENUM('RANDOM', 'ROUND_ROBIN', 'LEAST_USED', 'WARMUP_AWARE') DEFAULT 'WARMUP_AWARE',
+  selected_devices JSON,
+  scheduled_at TIMESTAMP,
+  started_at TIMESTAMP,
+  completed_at TIMESTAMP,
+  priority ENUM('LOW', 'MEDIUM', 'HIGH') DEFAULT 'MEDIUM',
+  rate_limit INT DEFAULT 100,
+  delay_between_messages INT DEFAULT 1000,
+  metadata JSON,
+  device_message_distribution JSON,
+  timing_config JSON,
+  timing_analytics JSON,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (excel_record_id) REFERENCES excel_records(id) ON DELETE SET NULL
+);
+
+-- Device logs table
+CREATE TABLE device_logs (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  device_id INT NOT NULL,
+  campaign_id INT,
+  excel_record_id INT,
+  excel_row_id INT,
+  excel_row_index INT,
+  recipient_number VARCHAR(20) NOT NULL,
+  message_content TEXT NOT NULL,
+  media_url VARCHAR(500),
+  status ENUM('QUEUED', 'SENT', 'DELIVERED', 'FAILED', 'PENDING') DEFAULT 'QUEUED',
+  error_message TEXT,
+  sent_at TIMESTAMP,
+  delivered_at TIMESTAMP,
+  time_gap_ms INT,
+  delivery_time_ms INT,
+  device_ip VARCHAR(45),
+  network_type VARCHAR(50),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE,
+  FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE SET NULL,
+  FOREIGN KEY (excel_record_id) REFERENCES excel_records(id) ON DELETE SET NULL,
+  FOREIGN KEY (excel_row_id) REFERENCES excel_rows(id) ON DELETE SET NULL
+);
+
+-- Device commands table
+CREATE TABLE device_commands (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  device_id INT NOT NULL,
+  command_type ENUM('SEND_MESSAGE', 'SEND_MEDIA', 'SYNC_STATUS', 'RESTART', 'UPDATE_CONFIG') NOT NULL,
+  payload JSON NOT NULL,
+  status ENUM('PENDING', 'SENT', 'ACKNOWLEDGED', 'COMPLETED', 'FAILED') DEFAULT 'PENDING',
+  priority INT DEFAULT 5,
+  sent_at TIMESTAMP,
+  completed_at TIMESTAMP,
+  error_message TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE
+);
+
+-- Device campaigns table
+CREATE TABLE device_campaigns (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  campaign_id INT NOT NULL,
+  device_id INT NOT NULL,
+  assigned_message_count INT DEFAULT 0,
+  messages_sent_in_campaign INT DEFAULT 0,
+  assigned_count INT DEFAULT 0,
+  sent_count INT DEFAULT 0,
+  failed_count INT DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
+  FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE,
+  UNIQUE KEY unique_campaign_device (campaign_id, device_id)
+);
+
+-- Insert a test user (you can change this later)
+INSERT INTO users (email, password, first_name, last_name, company_name) 
+VALUES ('admin@wxon.in', '$2b$10$rQZ9QmSTnkKzOgWpAuH8eeXCvVRyTQy.Qg9YvJ8vJ8vJ8vJ8vJ8vJ8', 'Admin', 'User', 'WXON Technologies');
+
+SHOW TABLES;
+EOF
+
+# 10. Test the new database structure
+echo "Testing new database structure..."
+mysql -u root -p -e "USE bulk_whatsapp_sms; SHOW TABLES; SELECT COUNT(*) as user_count FROM users;"
+
+# 11. Test Node.js model loading
+echo "Testing Node.js models..."
+node -e "
+try {
+  const models = require('./src/models');
+  console.log('✓ Models loaded successfully');
+  console.log('Available models:', Object.keys(models));
+} catch(error) {
+  console.log('✗ Model loading failed:', error.message);
+}
+"
+
+# 12. Test database connection from Node.js
+echo "Testing database connection from Node.js..."
+node -e "
+const { sequelize } = require('./src/models');
+sequelize.authenticate()
+  .then(() => console.log('✓ Database connection successful'))
+  .catch(err => console.log('✗ Database connection failed:', err.message));
+"
+
+# 13. Create necessary directories
+mkdir -p uploads logs
+
+# 14. Restart backend service
+echo "Restarting backend service..."
+pm2 stop whatsapp-pro 2>/dev/null || echo "No existing process"
+pm2 delete whatsapp-pro 2>/dev/null || echo "No existing process to delete"
+pm2 start server.js --name whatsapp-pro --env production
+
+# 15. Wait a moment for service to start
+sleep 3
+
+# 16. Test backend health
+echo "Testing backend health..."
+curl -s http://localhost:8080/health | jq . || curl -s http://localhost:8080/health
+
+# 17. Test API endpoints
+echo "Testing API endpoints..."
+curl -s "http://localhost:8080/api/test/db" | jq . || curl -s "http://localhost:8080/api/test/db"
+
+# 18. Reload nginx
+echo "Reloading nginx..."
+nginx -t && nginx -s reload
+
+# 19. Check PM2 status
+echo "Checking PM2 status..."
+pm2 status
+
+# 20. Final tests
+echo "============================================================================"
+echo "DEPLOYMENT COMPLETED! Test these URLs:"
+echo "- Website: https://wxon.in"
+echo "- Backend Health: https://wxon.in/health"
+echo "- API Test: https://wxon.in/api/test/db"
+echo "============================================================================"
+
+# 21. Show recent logs
+echo "Recent backend logs:"
+pm2 logs whatsapp-pro --lines 10
