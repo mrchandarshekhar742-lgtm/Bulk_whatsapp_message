@@ -42,10 +42,11 @@ export default function CreateCampaignPage() {
     if (inputMode === 'manual') {
       const count = manualNumbers.split('\n').filter(line => line.trim().length > 0).length;
       setTotalMessages(count);
-    } else if (selectedExcel) {
-      setTotalMessages(selectedExcel.total_rows || 0);
+    } else if (formData.excel_record_id) {
+      const selectedExcel = excelFiles.find(f => f.id === parseInt(formData.excel_record_id));
+      setTotalMessages(selectedExcel?.total_rows || 0);
     }
-  }, [inputMode, manualNumbers, selectedExcel]);
+  }, [inputMode, manualNumbers, formData.excel_record_id, excelFiles]);
 
   const fetchExcelFiles = async () => {
     try {

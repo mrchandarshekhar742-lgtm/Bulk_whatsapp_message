@@ -1,0 +1,208 @@
+# SIMPLE VPS FIX STEPS
+# Copy and paste these commands one by one in your VPS terminal
+
+# 1. Go to project directory and pull latest code
+cd /var/www/whatsapp-pro/Bulk_whatsapp_message
+git pull origin main
+
+# 2. Go to backend directory  
+cd backend
+
+# 3. Backup existing database (if any)
+mysqldump -u root -p bulk_whatsapp_sms > /tmp/backup_$(date +%Y%m%d_%H%M%S).sql
+
+# 4. Recreate database with proper schema (enter MySQL password when prompted)
+mysql -u root -p << 'EOF'
+DROP DATABASE IF EXISTS bulk_whatsapp_sms;
+CREATE DATABASE bulk_whatsapp_sms CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE bulk_whatsapp_sms;
+
+CREATE TABLE users (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  email VARCHAR(255) UNIQUE NOT NULL,
+  password VARCHAR(255) NOT NULL,
+  first_name VARCHAR(100),
+  last_name VARCHAR(100),
+  company_name VARCHAR(255),
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE devices (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  user_id INT NOT NULL,
+  device_label VARCHAR(100) NOT NULL,
+  phone_number VARCHAR(20),
+  device_ip VARCHAR(45),
+  device_token VARCHAR(255) UNIQUE NOT NULL,
+  is_online BOOLEAN DEFAULT FALSE,
+  is_active BOOLEAN DEFAULT TRUE,
+  warmup_stage ENUM('STAGE_1', 'STAGE_2', 'STAGE_3', 'STAGE_4') DEFAULT 'STAGE_1',
+  warmup_started_at DATE,
+  messages_sent_today INT DEFAULT 0,
+  daily_limit INT DEFAULT 15,
+  battery_level INT,
+  network_type VARCHAR(50),
+  android_version VARCHAR(50),
+  app_version VARCHAR(50),
+  last_seen TIMESTAMP,
+  last_message_sent_at TIMESTAMP,
+  total_messages_sent INT DEFAULT 0,
+  total_messages_failed INT DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE excel_records (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  filename VARCHAR(255),
+  original_name VARCHAR(255),
+  file_path VARCHAR(1000) NOT NULL,
+  file_size INT DEFAULT 0,
+  total_records INT DEFAULT 0,
+  processed_records INT DEFAULT 0,
+  status VARCHAR(50),
+  user_id INT NOT NULL,
+  has_duration_column BOOLEAN DEFAULT FALSE,
+  has_message_column BOOLEAN DEFAULT FALSE,
+  default_duration INT DEFAULT 30,
+  default_message TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE excel_rows (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  excel_record_id INT NOT NULL,
+  phone_number VARCHAR(20) NOT NULL,
+  duration INT DEFAULT 30,
+  message TEXT,
+  status ENUM('PENDING', 'SENT', 'FAILED', 'SKIPPED') DEFAULT 'PENDING',
+  sent_at TIMESTAMP,
+  error_message TEXT,
+  device_id INT,
+  row_number INT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (excel_record_id) REFERENCES excel_records(id) ON DELETE CASCADE,
+  FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE SET NULL
+);
+
+CREATE TABLE campaigns (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  user_id INT NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  description TEXT,
+  excel_record_id INT,
+  campaign_type ENUM('STANDARD', 'SCHEDULED', 'RECURRING') DEFAULT 'STANDARD',
+  status ENUM('DRAFT', 'PENDING', 'RUNNING', 'COMPLETED', 'PAUSED', 'CANCELLED') DEFAULT 'DRAFT',
+  message_content TEXT NOT NULL,
+  total_contacts INT DEFAULT 0,
+  sent_count INT DEFAULT 0,
+  failed_count INT DEFAULT 0,
+  pending_count INT DEFAULT 0,
+  rotation_mode ENUM('RANDOM', 'ROUND_ROBIN', 'LEAST_USED', 'WARMUP_AWARE') DEFAULT 'WARMUP_AWARE',
+  selected_devices JSON,
+  scheduled_at TIMESTAMP,
+  started_at TIMESTAMP,
+  completed_at TIMESTAMP,
+  priority ENUM('LOW', 'MEDIUM', 'HIGH') DEFAULT 'MEDIUM',
+  rate_limit INT DEFAULT 100,
+  delay_between_messages INT DEFAULT 1000,
+  metadata JSON,
+  device_message_distribution JSON,
+  timing_config JSON,
+  timing_analytics JSON,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (excel_record_id) REFERENCES excel_records(id) ON DELETE SET NULL
+);
+
+CREATE TABLE device_logs (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  device_id INT NOT NULL,
+  campaign_id INT,
+  excel_record_id INT,
+  excel_row_id INT,
+  excel_row_index INT,
+  recipient_number VARCHAR(20) NOT NULL,
+  message_content TEXT NOT NULL,
+  media_url VARCHAR(500),
+  status ENUM('QUEUED', 'SENT', 'DELIVERED', 'FAILED', 'PENDING') DEFAULT 'QUEUED',
+  error_message TEXT,
+  sent_at TIMESTAMP,
+  delivered_at TIMESTAMP,
+  time_gap_ms INT,
+  delivery_time_ms INT,
+  device_ip VARCHAR(45),
+  network_type VARCHAR(50),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE,
+  FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE SET NULL,
+  FOREIGN KEY (excel_record_id) REFERENCES excel_records(id) ON DELETE SET NULL,
+  FOREIGN KEY (excel_row_id) REFERENCES excel_rows(id) ON DELETE SET NULL
+);
+
+CREATE TABLE device_commands (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  device_id INT NOT NULL,
+  command_type ENUM('SEND_MESSAGE', 'SEND_MEDIA', 'SYNC_STATUS', 'RESTART', 'UPDATE_CONFIG') NOT NULL,
+  payload JSON NOT NULL,
+  status ENUM('PENDING', 'SENT', 'ACKNOWLEDGED', 'COMPLETED', 'FAILED') DEFAULT 'PENDING',
+  priority INT DEFAULT 5,
+  sent_at TIMESTAMP,
+  completed_at TIMESTAMP,
+  error_message TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE
+);
+
+CREATE TABLE device_campaigns (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  campaign_id INT NOT NULL,
+  device_id INT NOT NULL,
+  assigned_message_count INT DEFAULT 0,
+  messages_sent_in_campaign INT DEFAULT 0,
+  assigned_count INT DEFAULT 0,
+  sent_count INT DEFAULT 0,
+  failed_count INT DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
+  FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE,
+  UNIQUE KEY unique_campaign_device (campaign_id, device_id)
+);
+
+INSERT INTO users (email, password, first_name, last_name, company_name) 
+VALUES ('admin@wxon.in', '$2b$10$rQZ9QmSTnkKzOgWpAuH8eeXCvVRyTQy.Qg9YvJ8vJ8vJ8vJ8vJ8vJ8', 'Admin', 'User', 'WXON Technologies');
+
+SHOW TABLES;
+EOF
+
+# 5. Install dependencies
+npm install --production
+
+# 6. Create directories
+mkdir -p uploads logs
+
+# 7. Restart backend
+pm2 stop whatsapp-pro
+pm2 delete whatsapp-pro
+pm2 start server.js --name whatsapp-pro --env production
+
+# 8. Test backend
+curl http://localhost:8080/health
+
+# 9. Reload nginx
+nginx -t && nginx -s reload
+
+# 10. Check status
+pm2 status
+
+# DONE! Test: https://wxon.in

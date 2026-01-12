@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { body, param, query, validationResult } = require('express-validator');
-const { Device, DeviceLog, DeviceCommand } = require('../models');
+const { Device, DeviceLog, DeviceCommand, Campaign, DeviceCampaign } = require('../models');
 const { verifyToken } = require('../middleware/auth');
 const DeviceWebSocketManager = require('../services/DeviceWebSocketManager');
 const DeviceRotationEngine = require('../services/DeviceRotationEngine');
@@ -501,8 +501,6 @@ router.get('/status/online', verifyToken, async (req, res) => {
   }
 });
 
-const DeviceHealthMonitor = require('../services/DeviceHealthMonitor');
-
 // ============================================================================
 // HEALTH SUMMARY ENDPOINT
 // ============================================================================
@@ -533,18 +531,43 @@ router.get('/health-summary', verifyToken, async (req, res) => {
 
     for (const device of devices) {
       try {
-        const health = await DeviceHealthMonitor.calculateHealthScore(device.id);
-        totalHealthScore += health.healthScore;
+        // Simple health calculation without external service
+        let healthScore = 50; // Base score
         
-        if (health.healthScore >= 75) {
+        // Online status
+        if (device.is_online) {
+          healthScore += 30;
+        } else {
+          healthScore -= 20;
+        }
+        
+        // Battery level
+        if (device.battery_level) {
+          if (device.battery_level > 50) {
+            healthScore += 10;
+          } else if (device.battery_level < 20) {
+            healthScore -= 15;
+          }
+        }
+        
+        // Message capacity
+        const remainingCapacity = device.daily_limit - device.messages_sent_today;
+        if (remainingCapacity > device.daily_limit * 0.5) {
+          healthScore += 10;
+        }
+        
+        // Ensure score is within bounds
+        healthScore = Math.max(0, Math.min(100, healthScore));
+        
+        totalHealthScore += healthScore;
+        
+        if (healthScore >= 75) {
           healthyDevices++;
-        } else if (health.healthScore < 40) {
+        } else if (healthScore < 40) {
           criticalDevices++;
+          recommendations.push(`Device ${device.device_label} needs attention`);
         }
         
-        if (health.recommendations && health.recommendations.length > 0) {
-          recommendations.push(...health.recommendations);
-        }
       } catch (error) {
         console.error(`Error calculating health for device ${device.id}:`, error);
         // Assume poor health if calculation fails
