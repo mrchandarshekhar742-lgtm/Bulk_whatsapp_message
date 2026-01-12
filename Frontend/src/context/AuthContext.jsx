@@ -1,5 +1,4 @@
 import React, { createContext, useState, useEffect } from 'react';
-import axios from 'axios';
 import { apiClient } from '../api/client';
 
 export const AuthContext = createContext();
@@ -9,28 +8,28 @@ export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem('access_token'));
   const [loading, setLoading] = useState(true);
 
-  // Setup axios default headers and interceptors
+  // Setup apiClient default headers and interceptors
   useEffect(() => {
     // Set the authorization header
     if (token) {
-      const current = axios.defaults.headers.common['Authorization'];
+      const current = apiClient.defaults.headers.common['Authorization'];
       const want = `Bearer ${token}`;
       if (current !== want) {
-        // Set axios default Authorization header. Do NOT log the full token for security.
+        // Set apiClient default Authorization header. Do NOT log the full token for security.
         console.log('Setting axios Authorization header');
-        axios.defaults.headers.common['Authorization'] = want;
+        apiClient.defaults.headers.common['Authorization'] = want;
       }
     } else {
-      if (axios.defaults.headers.common['Authorization']) {
+      if (apiClient.defaults.headers.common['Authorization']) {
         console.log('Clearing axios Authorization header');
-        delete axios.defaults.headers.common['Authorization'];
+        delete apiClient.defaults.headers.common['Authorization'];
       }
     }
   }, [token]);
 
   // Add response interceptor to handle token refresh
   useEffect(() => {
-    const interceptor = axios.interceptors.response.use(
+    const interceptor = apiClient.interceptors.response.use(
       (response) => response,
       async (error) => {
         if (error.response?.status === 401 && error.response?.data?.error === 'Token expired') {
@@ -41,8 +40,8 @@ export function AuthProvider({ children }) {
               const newToken = response.data.access_token;
               localStorage.setItem('access_token', newToken);
               setToken(newToken);
-              axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
-              return axios(error.config);
+              apiClient.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+              return apiClient(error.config);
             }
           } catch (refreshError) {
             localStorage.removeItem('access_token');
@@ -54,7 +53,7 @@ export function AuthProvider({ children }) {
         return Promise.reject(error);
       }
     );
-    return () => axios.interceptors.response.eject(interceptor);
+    return () => apiClient.interceptors.response.eject(interceptor);
   }, []);
 
   // Load user from token

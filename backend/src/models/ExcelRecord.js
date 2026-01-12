@@ -7,17 +7,13 @@ const ExcelRecord = sequelize.define('ExcelRecord', {
     primaryKey: true,
     autoIncrement: true
   },
-  user_id: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
-    references: {
-      model: 'users',
-      key: 'id'
-    }
-  },
-  file_name: {
+  filename: {
     type: DataTypes.STRING,
-    allowNull: false
+    allowNull: true
+  },
+  original_name: {
+    type: DataTypes.STRING,
+    allowNull: true
   },
   file_path: {
     type: DataTypes.STRING(1000),
@@ -28,21 +24,47 @@ const ExcelRecord = sequelize.define('ExcelRecord', {
     allowNull: false,
     defaultValue: 0
   },
-  total_rows: {
+  total_records: {
     type: DataTypes.INTEGER,
     defaultValue: 0
   },
-  rows: {
-    type: DataTypes.JSON,
-    allowNull: false
+  processed_records: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0
   },
-  uploaded_at: {
-    type: DataTypes.DATE,
+  status: {
+    type: DataTypes.STRING(50),
+    allowNull: true
+  },
+  user_id: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: 'users',
+      key: 'id'
+    }
+  },
+  has_duration_column: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
+  },
+  has_message_column: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
+  },
+  default_duration: {
+    type: DataTypes.INTEGER,
+    defaultValue: 30
+  },
+  default_message: {
+    type: DataTypes.TEXT,
     allowNull: true
   }
 }, {
   tableName: 'excel_records',
-  timestamps: false // Database uses uploaded_at instead of created_at/updated_at
+  timestamps: true,
+  createdAt: 'created_at',
+  updatedAt: 'updated_at'
 });
 
 module.exports = ExcelRecord;

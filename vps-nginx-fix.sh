@@ -1,3 +1,11 @@
+#!/bin/bash
+
+echo "========================================="
+echo "Fixing MIME Types for JavaScript Files"
+echo "========================================="
+
+# Create the fixed nginx configuration
+cat > /etc/nginx/sites-available/wxon.in << 'EOF'
 # WhatsApp Pro Bulk Sender - Nginx Configuration
 # Place this file at: /etc/nginx/sites-available/whatsapp-pro
 
@@ -36,7 +44,7 @@ server {
     gzip on;
     gzip_vary on;
     gzip_min_length 1024;
-    gzip_proxied expired no-cache no-store private auth;
+    gzip_proxied expired no-cache no-store private must-revalidate auth;
     gzip_types text/plain text/css text/xml text/javascript application/x-javascript application/xml+rss application/javascript application/json;
     
     # Client max body size for file uploads
@@ -71,7 +79,7 @@ server {
     
     # Backend API
     location /api/ {
-        proxy_pass http://127.0.0.1:8080/api/;
+        proxy_pass http://127.0.0.1:8080;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -121,3 +129,35 @@ server {
         return 404;
     }
 }
+EOF
+
+echo ""
+echo "Step 1: Nginx configuration updated!"
+
+echo ""
+echo "Step 2: Testing nginx configuration..."
+nginx -t
+
+if [ $? -eq 0 ]; then
+    echo ""
+    echo "Step 3: Reloading nginx..."
+    systemctl reload nginx
+    
+    echo ""
+    echo "Step 4: Checking nginx status..."
+    systemctl status nginx --no-pager -l
+    
+    echo ""
+    echo "========================================="
+    echo "MIME Types Fix Completed Successfully!"
+    echo "========================================="
+    echo ""
+    echo "The website should now load JavaScript files correctly."
+    echo "Test the website at: https://wxon.in"
+    echo ""
+else
+    echo ""
+    echo "ERROR: Nginx configuration test failed!"
+    echo "Please check the configuration and try again."
+    echo ""
+fi

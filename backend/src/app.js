@@ -29,10 +29,6 @@ app.use(helmet());
 const allowedOrigins = [
   'https://wxon.in',
   'https://www.wxon.in',
-  'http://wxon.in',
-  'http://www.wxon.in',
-  'http://wxon.in:8080',
-  'http://www.wxon.in:8080',
   'http://localhost:5173',
   'http://localhost:5174',
 ];
