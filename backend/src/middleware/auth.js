@@ -7,50 +7,53 @@ const logger = require('../utils/logger');
  */
 exports.verifyToken = async (req, res, next) => {
   try {
+    console.log('=== AUTH MIDDLEWARE DEBUG ===');
+    console.log('Headers:', req.headers.authorization ? 'Authorization header present' : 'No authorization header');
+    
     const authHeader = req.headers.authorization;
     
     if (!authHeader) {
-      logger.error('No authorization header provided');
+      console.log('AUTH ERROR: No authorization header provided');
       return res.status(401).json({ error: 'No token provided' });
     }
 
     const token = authHeader.split(' ')[1];
     
     if (!token) {
-      logger.error('No token in authorization header');
+      console.log('AUTH ERROR: No token in authorization header');
       return res.status(401).json({ error: 'No token provided' });
     }
 
+    console.log('AUTH: Token found, verifying...');
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
     if (!decoded.userId) {
-      logger.error('Token missing userId');
+      console.log('AUTH ERROR: Token missing userId');
       return res.status(401).json({ error: 'Invalid token format' });
     }
 
+    console.log('AUTH: Looking up user ID:', decoded.userId);
     const user = await User.findByPk(decoded.userId);
 
     if (!user) {
-      logger.error('User not found for token', { userId: decoded.userId });
+      console.log('AUTH ERROR: User not found for ID:', decoded.userId);
       return res.status(401).json({ error: 'User not found' });
     }
 
+    console.log('AUTH SUCCESS: User found:', { id: user.id, email: user.email });
     req.user = user;
     next();
   } catch (error) {
+    console.log('AUTH EXCEPTION:', error.message);
     if (error.name === 'TokenExpiredError') {
-      logger.error('Token expired', { error: error.message });
+      console.log('AUTH ERROR: Token expired');
       return res.status(401).json({ error: 'Token expired' });
     }
     if (error.name === 'JsonWebTokenError') {
-      logger.error('Invalid token', { error: error.message });
+      console.log('AUTH ERROR: Invalid token');
       return res.status(401).json({ error: 'Invalid token' });
     }
-    logger.error('Token verification failed', { 
-      error: error.message, 
-      stack: error.stack,
-      headers: req.headers.authorization ? 'present' : 'missing'
-    });
+    console.log('AUTH ERROR: Unexpected error:', error);
     res.status(401).json({ error: 'Authentication failed' });
   }
 };

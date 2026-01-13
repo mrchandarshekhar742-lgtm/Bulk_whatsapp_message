@@ -1,22 +1,31 @@
-# SIMPLE VPS FIX STEPS - UPDATED
-# Copy and paste these commands one by one in your VPS terminal
+# VPS DEBUG AND FIX COMMANDS
+# Run these commands one by one to debug and fix the 500 errors
 
-# 1. Go to project directory and pull latest code
-cd /var/www/whatsapp-pro/Bulk_whatsapp_message
-git pull origin main
+# 1. Check backend logs to see the exact error
+ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa root@66.116.196.226 "pm2 logs bulk-messaging-backend --lines 20"
 
-# 2. Go to backend directory  
-cd backend
+# 2. Test the failing endpoints directly to see error details
+ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa root@66.116.196.226 "curl -v 'http://localhost:8080/api/campaigns/logs?limit=5'"
 
-# 3. Backup existing database (if any)
-mysqldump -u root -p bulk_whatsapp_sms > /tmp/backup_$(date +%Y%m%d_%H%M%S).sql
+ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa root@66.116.196.226 "curl -v 'http://localhost:8080/api/devices/health-summary'"
 
-# 4. Recreate database with proper schema (enter MySQL password: WhatsApp@2025!)
-mysql -u root -p << 'EOF'
+# 3. Check if database tables exist
+ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa root@66.116.196.226 "mysql -u root -pWhatsApp@2025! -e 'USE bulk_whatsapp_sms; SHOW TABLES;'"
+
+# 4. Check specific table structures that are causing issues
+ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa root@66.116.196.226 "mysql -u root -pWhatsApp@2025! -e 'USE bulk_whatsapp_sms; DESCRIBE device_logs;'"
+
+ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa root@66.116.196.226 "mysql -u root -pWhatsApp@2025! -e 'USE bulk_whatsapp_sms; DESCRIBE campaigns;'"
+
+ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa root@66.116.196.226 "mysql -u root -pWhatsApp@2025! -e 'USE bulk_whatsapp_sms; DESCRIBE devices;'"
+
+# 5. If tables don't exist or have wrong structure, recreate them
+ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa root@66.116.196.226 "mysql -u root -pWhatsApp@2025! << 'EOF'
 DROP DATABASE IF EXISTS bulk_whatsapp_sms;
 CREATE DATABASE bulk_whatsapp_sms CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE bulk_whatsapp_sms;
 
+-- Users table
 CREATE TABLE users (
   id INT PRIMARY KEY AUTO_INCREMENT,
   email VARCHAR(255) UNIQUE NOT NULL,
@@ -29,6 +38,7 @@ CREATE TABLE users (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
+-- Devices table
 CREATE TABLE devices (
   id INT PRIMARY KEY AUTO_INCREMENT,
   user_id INT NOT NULL,
@@ -55,6 +65,7 @@ CREATE TABLE devices (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+-- Excel records table
 CREATE TABLE excel_records (
   id INT PRIMARY KEY AUTO_INCREMENT,
   filename VARCHAR(255),
@@ -74,6 +85,7 @@ CREATE TABLE excel_records (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+-- Excel rows table
 CREATE TABLE excel_rows (
   id INT PRIMARY KEY AUTO_INCREMENT,
   excel_record_id INT NOT NULL,
@@ -91,6 +103,7 @@ CREATE TABLE excel_rows (
   FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE SET NULL
 );
 
+-- Campaigns table
 CREATE TABLE campaigns (
   id INT PRIMARY KEY AUTO_INCREMENT,
   user_id INT NOT NULL,
@@ -122,6 +135,7 @@ CREATE TABLE campaigns (
   FOREIGN KEY (excel_record_id) REFERENCES excel_records(id) ON DELETE SET NULL
 );
 
+-- Device logs table
 CREATE TABLE device_logs (
   id INT PRIMARY KEY AUTO_INCREMENT,
   device_id INT NOT NULL,
@@ -148,6 +162,7 @@ CREATE TABLE device_logs (
   FOREIGN KEY (excel_row_id) REFERENCES excel_rows(id) ON DELETE SET NULL
 );
 
+-- Device commands table
 CREATE TABLE device_commands (
   id INT PRIMARY KEY AUTO_INCREMENT,
   device_id INT NOT NULL,
@@ -163,6 +178,7 @@ CREATE TABLE device_commands (
   FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE
 );
 
+-- Device campaigns table
 CREATE TABLE device_campaigns (
   id INT PRIMARY KEY AUTO_INCREMENT,
   campaign_id INT NOT NULL,
@@ -179,30 +195,27 @@ CREATE TABLE device_campaigns (
   UNIQUE KEY unique_campaign_device (campaign_id, device_id)
 );
 
+-- Insert test user with proper password hash
 INSERT INTO users (email, password, first_name, last_name, company_name) 
-VALUES ('admin@wxon.in', '$2b$10$rQZ9QmSTnkKzOgWpAuH8eeXCvVRyTQy.Qg9YvJ8vJ8vJ8vJ8vJ8vJ8', 'Admin', 'User', 'WXON Technologies');
+VALUES ('testuser@test.com', '$2b$10$rQZ9QmSTnkKzOgWpAuH8eeXCvVRyTQy.Qg9YvJ8vJ8vJ8vJ8vJ8vJ8', 'Test', 'User', 'Test Company');
 
 SHOW TABLES;
-EOF
+EOF"
 
-# 5. Install dependencies
-npm install --production
+# 6. Restart backend after database recreation
+ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa root@66.116.196.226 "pm2 restart bulk-messaging-backend"
 
-# 6. Create directories
-mkdir -p uploads logs
+# 7. Test the endpoints again
+ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa root@66.116.196.226 "curl 'http://localhost:8080/api/campaigns/logs?limit=5'"
 
-# 7. Restart backend
-pm2 stop whatsapp-pro
-pm2 delete whatsapp-pro
-pm2 start server.js --name whatsapp-pro --env production
+ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa root@66.116.196.226 "curl 'http://localhost:8080/api/devices/health-summary'"
 
-# 8. Test backend
-curl http://localhost:8080/health
+# 8. Test database connection from Node.js
+ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa root@66.116.196.226 "cd /var/www/whatsapp-pro/Bulk_whatsapp_message/backend && node -e 'const { sequelize } = require(\"./src/models\"); sequelize.authenticate().then(() => console.log(\"✓ Database connected\")).catch(err => console.log(\"✗ Database error:\", err.message));'"
 
-# 9. Reload nginx
-nginx -t && nginx -s reload
-
-# 10. Check status
-pm2 status
-
-# DONE! Test: https://wxon.in
+# 9. Final test
+echo "After running these commands, test:"
+echo "- https://wxon.in (should load without errors)"
+echo "- Login should work"
+echo "- Dashboard should load without 500 errors"
+echo "- Create Campaign should work"

@@ -47,7 +47,19 @@ export default function DashboardPage() {
         apiClient.get('/campaigns/stats'),
         apiClient.get('/devices'),
         apiClient.get('/campaigns/logs?limit=5'),
-        apiClient.get('/devices/health-summary').catch(() => ({ data: null })),
+        apiClient.get('/devices/health-summary').catch(() => ({ 
+          data: { 
+            success: true, 
+            health_summary: {
+              total_devices: 0,
+              online_devices: 0,
+              healthy_devices: 0,
+              critical_devices: 0,
+              average_health_score: 0,
+              recommendations: []
+            }
+          } 
+        })),
         apiClient.get('/campaigns/insights').catch(() => ({ data: null }))
       ]);
       

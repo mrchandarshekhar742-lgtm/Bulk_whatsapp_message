@@ -1,0 +1,42 @@
+# VPS TERMINAL COMMANDS - STEP BY STEP
+# Run these commands one by one on your VPS
+
+# 1. Navigate to project directory and pull latest code
+ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa root@66.116.196.226 "cd /var/www/whatsapp-pro/Bulk_whatsapp_message && git pull origin main"
+
+# 2. Copy all working models from backup (like you did with User.js)
+ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa root@66.116.196.226 "cp /var/www/whatsapp-pro/Bulk_whatsapp_message_backup/backend/src/models/*.js /var/www/whatsapp-pro/Bulk_whatsapp_message/backend/src/models/"
+
+# 3. Install/update backend dependencies
+ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa root@66.116.196.226 "cd /var/www/whatsapp-pro/Bulk_whatsapp_message/backend && npm install --production"
+
+# 4. Create necessary directories
+ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa root@66.116.196.226 "cd /var/www/whatsapp-pro/Bulk_whatsapp_message/backend && mkdir -p uploads logs"
+
+# 5. Restart backend (use the correct PM2 process name)
+ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa root@66.116.196.226 "pm2 restart bulk-messaging-backend"
+
+# 6. Test backend health
+ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa root@66.116.196.226 "curl http://localhost:8080/health"
+
+# 7. Test API endpoints that were failing
+ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa root@66.116.196.226 "curl http://localhost:8080/api/test/db"
+
+# 8. Test device health endpoint
+ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa root@66.116.196.226 "curl http://localhost:8080/api/devices/health-summary"
+
+# 9. Test campaign logs endpoint
+ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa root@66.116.196.226 "curl 'http://localhost:8080/api/campaigns/logs?limit=5'"
+
+# 10. Check PM2 status
+ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa root@66.116.196.226 "pm2 status"
+
+# 11. Reload nginx
+ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa root@66.116.196.226 "nginx -t && nginx -s reload"
+
+# 12. Final test - check website
+echo "Test these URLs in browser:"
+echo "- Website: https://wxon.in"
+echo "- Login should work without errors"
+echo "- Dashboard should load without 500 errors"
+echo "- Create Campaign should open properly"

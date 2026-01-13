@@ -120,6 +120,78 @@ router.post('/',
 );
 
 // ============================================================================
+// HEALTH SUMMARY ENDPOINT (Must be before /:id routes)
+// ============================================================================
+router.get('/health-summary', verifyToken, async (req, res) => {
+  try {
+    const devices = await Device.findAll({
+      where: { user_id: req.user.id },
+    });
+
+    if (devices.length === 0) {
+      return res.json({
+        success: true,
+        health_summary: {
+          total_devices: 0,
+          online_devices: 0,
+          healthy_devices: 0,
+          critical_devices: 0,
+          average_health_score: 0,
+          recommendations: []
+        }
+      });
+    }
+
+    let totalHealthScore = 0;
+    let healthyDevices = 0;
+    let criticalDevices = 0;
+    const recommendations = [];
+
+    for (const device of devices) {
+      let healthScore = 50;
+      
+      if (device.is_online) {
+        healthScore += 30;
+      } else {
+        healthScore -= 20;
+      }
+      
+      if (device.battery_level && device.battery_level > 50) {
+        healthScore += 10;
+      }
+      
+      healthScore = Math.max(0, Math.min(100, healthScore));
+      totalHealthScore += healthScore;
+      
+      if (healthScore >= 75) {
+        healthyDevices++;
+      } else if (healthScore < 40) {
+        criticalDevices++;
+      }
+    }
+
+    const averageHealthScore = Math.round(totalHealthScore / devices.length);
+    const onlineDevices = devices.filter(d => d.is_online).length;
+
+    res.json({
+      success: true,
+      health_summary: {
+        total_devices: devices.length,
+        online_devices: onlineDevices,
+        healthy_devices: healthyDevices,
+        critical_devices: criticalDevices,
+        average_health_score: averageHealthScore,
+        recommendations: recommendations
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching device health summary:', error);
+    res.status(500).json({ error: 'Failed to fetch device health summary' });
+  }
+});
+
+// ============================================================================
 // 3. GET DEVICE BY ID
 // ============================================================================
 router.get('/:id',
@@ -501,104 +573,7 @@ router.get('/status/online', verifyToken, async (req, res) => {
   }
 });
 
-// ============================================================================
-// HEALTH SUMMARY ENDPOINT
-// ============================================================================
-router.get('/health-summary', verifyToken, async (req, res) => {
-  try {
-    const devices = await Device.findAll({
-      where: { user_id: req.user.id },
-    });
 
-    if (devices.length === 0) {
-      return res.json({
-        success: true,
-        health_summary: {
-          total_devices: 0,
-          online_devices: 0,
-          healthy_devices: 0,
-          critical_devices: 0,
-          average_health_score: 0,
-          recommendations: []
-        }
-      });
-    }
-
-    let totalHealthScore = 0;
-    let healthyDevices = 0;
-    let criticalDevices = 0;
-    const recommendations = [];
-
-    for (const device of devices) {
-      try {
-        // Simple health calculation without external service
-        let healthScore = 50; // Base score
-        
-        // Online status
-        if (device.is_online) {
-          healthScore += 30;
-        } else {
-          healthScore -= 20;
-        }
-        
-        // Battery level
-        if (device.battery_level) {
-          if (device.battery_level > 50) {
-            healthScore += 10;
-          } else if (device.battery_level < 20) {
-            healthScore -= 15;
-          }
-        }
-        
-        // Message capacity
-        const remainingCapacity = device.daily_limit - device.messages_sent_today;
-        if (remainingCapacity > device.daily_limit * 0.5) {
-          healthScore += 10;
-        }
-        
-        // Ensure score is within bounds
-        healthScore = Math.max(0, Math.min(100, healthScore));
-        
-        totalHealthScore += healthScore;
-        
-        if (healthScore >= 75) {
-          healthyDevices++;
-        } else if (healthScore < 40) {
-          criticalDevices++;
-          recommendations.push(`Device ${device.device_label} needs attention`);
-        }
-        
-      } catch (error) {
-        console.error(`Error calculating health for device ${device.id}:`, error);
-        // Assume poor health if calculation fails
-        if (device.is_online) {
-          totalHealthScore += 30; // Poor but not critical
-        } else {
-          criticalDevices++;
-        }
-      }
-    }
-
-    const averageHealthScore = devices.length > 0 ? Math.round(totalHealthScore / devices.length) : 0;
-    const onlineDevices = devices.filter(d => d.is_online).length;
-
-    res.json({
-      success: true,
-      health_summary: {
-        total_devices: devices.length,
-        online_devices: onlineDevices,
-        healthy_devices: healthyDevices,
-        critical_devices: criticalDevices,
-        average_health_score: averageHealthScore,
-        recommendations: recommendations.slice(0, 5) // Limit to top 5 recommendations
-      }
-    });
-
-  } catch (error) {
-    console.error('Error fetching device health summary:', error);
-    res.status(500).json({ error: 'Failed to fetch device health summary' });
-  }
-});
 
 module.exports = router;
 
