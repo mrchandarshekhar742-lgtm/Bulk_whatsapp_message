@@ -8,7 +8,7 @@ export default function DevicesPage() {
   const [devices, setDevices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newDevice, setNewDevice] = useState({ device_label: '', phone_number: '', daily_limit: 50 });
+  const [newDevice, setNewDevice] = useState({ device_label: '', phone_number: '', daily_limit: '' });
   const [deviceToken, setDeviceToken] = useState(null);
   
   // NEW: Device performance summary
@@ -51,12 +51,18 @@ export default function DevicesPage() {
     fetchPerformanceSummary(device.id);
   };
 
+  const handleCloseModal = () => {
+    setShowAddModal(false);
+    setNewDevice({ device_label: '', phone_number: '', daily_limit: '' }); // Reset form
+    setDeviceToken(null);
+  };
+
   const handleAddDevice = async (e) => {
     e.preventDefault();
     try {
       const response = await apiClient.post('/devices', newDevice);
       setDeviceToken(response.data.device.device_token);
-      setNewDevice({ device_label: '', phone_number: '', daily_limit: 50 });
+      setNewDevice({ device_label: '', phone_number: '', daily_limit: '' }); // Reset to empty
       fetchDevices();
     } catch (error) {
       console.error('Error adding device:', error);
@@ -336,7 +342,7 @@ export default function DevicesPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => !deviceToken && setShowAddModal(false)}
+              onClick={() => !deviceToken && handleCloseModal()}
               className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
             >
               <motion.div
@@ -350,7 +356,7 @@ export default function DevicesPage() {
                   <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Add New Device</h2>
                   {!deviceToken && (
                     <button
-                      onClick={() => setShowAddModal(false)}
+                      onClick={handleCloseModal}
                       className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                     >
                       <MdClose className="text-xl text-gray-500" />
@@ -369,8 +375,7 @@ export default function DevicesPage() {
                     </div>
                     <button
                       onClick={() => {
-                        setShowAddModal(false);
-                        setDeviceToken(null);
+                        handleCloseModal();
                       }}
                       className="w-full px-4 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-medium"
                     >
@@ -405,9 +410,10 @@ export default function DevicesPage() {
                       <input
                         type="number"
                         value={newDevice.daily_limit}
-                        onChange={(e) => setNewDevice({ ...newDevice, daily_limit: parseInt(e.target.value) || 50 })}
+                        onChange={(e) => setNewDevice({ ...newDevice, daily_limit: parseInt(e.target.value) || '' })}
+                        onFocus={(e) => e.target.select()} // Select all text when focused
                         className="w-full px-4 py-2.5 bg-gray-50 text-gray-900 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
-                        placeholder="50"
+                        placeholder="Enter daily limit (1-1000)"
                         min="1"
                         max="1000"
                         required
@@ -417,7 +423,7 @@ export default function DevicesPage() {
                     <div className="flex gap-3">
                       <button
                         type="button"
-                        onClick={() => setShowAddModal(false)}
+                        onClick={handleCloseModal}
                         className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
                       >
                         Cancel
