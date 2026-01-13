@@ -163,18 +163,35 @@ router.post('/',
         rotation_mode
       );
 
-      // Create campaign record (simplified - you can expand this)
-      const campaign = {
-        id: Date.now(), // Temporary ID
-        name: sanitizedName, // Use sanitized name
+      // Create campaign record in database
+      const campaignRecord = await Campaign.create({
+        user_id: req.user.id,
+        name: sanitizedName,
+        description: `Excel campaign with ${recipients.length} recipients`,
         excel_record_id,
-        message_template: sanitizedMessage, // Use sanitized message
+        campaign_type: 'STANDARD',
+        status: 'RUNNING',
+        message_content: sanitizedMessage,
+        total_contacts: recipients.length,
+        sent_count: 0,
+        failed_count: 0,
+        selected_devices: device_ids,
+        rotation_mode,
+        device_message_distribution: distribution,
+      });
+
+      // Create campaign object for response
+      const campaign = {
+        id: campaignRecord.id, // Use database ID
+        name: sanitizedName,
+        excel_record_id,
+        message_template: sanitizedMessage,
         device_ids,
         rotation_mode,
         total_recipients: recipients.length,
         distribution,
-        status: 'QUEUED',
-        created_at: new Date(),
+        status: 'RUNNING',
+        created_at: campaignRecord.created_at,
       };
 
       // Queue messages to devices with per-device delay management
@@ -329,18 +346,34 @@ router.post('/manual',
         rotation_mode
       );
 
-      // Create campaign record
+      // Create campaign record in database
+      const campaignRecord = await Campaign.create({
+        user_id: req.user.id,
+        name: sanitizedName,
+        description: `Manual campaign with ${validNumbers.length} recipients`,
+        campaign_type: 'STANDARD',
+        status: 'RUNNING',
+        message_content: sanitizedMessage,
+        total_contacts: validNumbers.length,
+        sent_count: 0,
+        failed_count: 0,
+        selected_devices: device_ids,
+        rotation_mode,
+        device_message_distribution: distribution,
+      });
+
+      // Create campaign object for response
       const campaign = {
-        id: Date.now(),
-        name: sanitizedName, // Use sanitized name
+        id: campaignRecord.id, // Use database ID
+        name: sanitizedName,
         type: 'MANUAL',
-        message: sanitizedMessage, // Use sanitized message
+        message: sanitizedMessage,
         device_ids,
         rotation_mode,
         total_recipients: validNumbers.length,
         distribution,
-        status: 'QUEUED',
-        created_at: new Date(),
+        status: 'RUNNING',
+        created_at: campaignRecord.created_at,
       };
 
       // Queue messages to devices with per-device delay management
