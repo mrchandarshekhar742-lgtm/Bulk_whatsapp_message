@@ -1,6 +1,7 @@
 const WebSocket = require('ws');
 const logger = require('../utils/logger');
-const { Device, DeviceCommand } = require('../models');
+const { Device, DeviceCommand, DeviceLog, DeviceCampaign } = require('../models');
+const { Op } = require('sequelize');
 
 class DeviceWebSocketManager {
   constructor() {
