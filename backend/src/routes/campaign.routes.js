@@ -269,6 +269,30 @@ router.post('/',
                 try {
                   await DeviceWebSocketManager.sendCommand(deviceId, command);
                   logger.info(`Command sent to device ${deviceId} for ${phoneNumber}`);
+                  
+                  // Auto-update status to SENT after 30 seconds (assuming message was sent)
+                  setTimeout(async () => {
+                    try {
+                      const log = await DeviceLog.findOne({
+                        where: {
+                          device_id: deviceId,
+                          recipient_number: phoneNumber,
+                          status: 'QUEUED'
+                        }
+                      });
+                      
+                      if (log) {
+                        await log.update({
+                          status: 'SENT',
+                          sent_at: new Date()
+                        });
+                        logger.info(`Auto-updated status to SENT for ${phoneNumber}`);
+                      }
+                    } catch (err) {
+                      logger.error(`Failed to auto-update status: ${err.message}`);
+                    }
+                  }, 30000); // 30 seconds after command sent
+                  
                 } catch (error) {
                   logger.error(`Failed to send command to device ${deviceId}:`, error);
                 }
@@ -451,6 +475,30 @@ router.post('/manual',
                 try {
                   await DeviceWebSocketManager.sendCommand(deviceId, command);
                   logger.info(`Command sent to online device ${deviceId} for ${phoneNumber}`);
+                  
+                  // Auto-update status to SENT after 30 seconds (assuming message was sent)
+                  setTimeout(async () => {
+                    try {
+                      const log = await DeviceLog.findOne({
+                        where: {
+                          device_id: deviceId,
+                          recipient_number: phoneNumber,
+                          status: 'QUEUED'
+                        }
+                      });
+                      
+                      if (log) {
+                        await log.update({
+                          status: 'SENT',
+                          sent_at: new Date()
+                        });
+                        logger.info(`Auto-updated status to SENT for ${phoneNumber}`);
+                      }
+                    } catch (err) {
+                      logger.error(`Failed to auto-update status: ${err.message}`);
+                    }
+                  }, 30000); // 30 seconds after command sent
+                  
                 } catch (error) {
                   logger.error(`Failed to send command to device ${deviceId}:`, error);
                   // Update log status to failed if command sending fails
