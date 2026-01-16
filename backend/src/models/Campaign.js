@@ -60,8 +60,8 @@ const Campaign = sequelize.define('Campaign', {
     defaultValue: 0
   },
   rotation_mode: {
-    type: DataTypes.ENUM('RANDOM', 'ROUND_ROBIN', 'LEAST_USED', 'WARMUP_AWARE'),
-    defaultValue: 'WARMUP_AWARE'
+    type: DataTypes.ENUM('RANDOM', 'ROUND_ROBIN', 'LEAST_USED', 'WARMUP_AWARE', 'SMART_ROTATION'),
+    defaultValue: 'SMART_ROTATION'
   },
   selected_devices: {
     type: DataTypes.JSON,
