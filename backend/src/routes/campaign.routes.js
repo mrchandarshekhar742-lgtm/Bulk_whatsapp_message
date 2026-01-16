@@ -194,90 +194,109 @@ router.post('/',
         created_at: campaignRecord.created_at,
       };
 
-      // Queue messages to devices with per-device delay management
-      let assignedIndex = 0;
+      // Queue messages to devices - Process asynchronously to avoid timeout
       const deviceIdsList = Object.keys(distribution);
       const deviceDelayTracker = new Map(); // Track cumulative delay per device
-
-      for (const recipient of recipients) {
-        // Select device based on rotation
-        const deviceId = await DeviceRotationEngine.selectDevice(device_ids, rotation_mode);
-
-        // Replace variables in message template
-        let message = sanitizedMessage; // Use sanitized message
-        Object.keys(recipient).forEach(key => {
-          message = message.replace(new RegExp(`{{${key}}}`, 'g'), recipient[key] || '');
-        });
-
-        // Get phone number from recipient and sanitize it
-        const rawPhoneNumber = recipient.phone || recipient.Phone || recipient.number || recipient.Number;
-        const phoneNumber = sanitizePhoneNumber(rawPhoneNumber);
-
-        if (!phoneNumber) {
-          console.warn('Recipient has invalid phone number:', recipient);
-          continue;
-        }
-
-        // Create device log
-        await DeviceLog.create({
-          device_id: deviceId,
-          excel_record_id: excel_record_id,
-          excel_row_index: assignedIndex,
-          recipient_number: phoneNumber,
-          message_content: message,
-          status: 'QUEUED',
-        });
-
-        // Create device command
-        const command = await DeviceCommand.create({
-          device_id: deviceId,
-          command_type: 'SEND_MESSAGE',
-          payload: {
-            recipient_number: phoneNumber,
-            message: message,
-            campaign_name: sanitizedName, // Use sanitized name
-          },
-          priority: 5,
-        });
-
-        // Send command with per-device delay management
-        if (DeviceWebSocketManager.isDeviceOnline(deviceId)) {
-          // Get current delay for this device (starts at 0)
-          let currentDeviceDelay = deviceDelayTracker.get(deviceId) || 0;
-          
-          // Generate random delay between 9-25 seconds for this message
-          const randomDelaySeconds = Math.floor(Math.random() * 17) + 9; // 9-25 seconds
-          
-          // If device is being reused, add extra delay to prevent spam detection
-          if (currentDeviceDelay > 0) {
-            const extraDelay = Math.floor(Math.random() * 10) + 5; // 5-14 seconds extra for reused device
-            currentDeviceDelay += extraDelay * 1000;
-          }
-          
-          // Add base delay
-          currentDeviceDelay += randomDelaySeconds * 1000;
-          
-          // Update tracker
-          deviceDelayTracker.set(deviceId, currentDeviceDelay);
-          
-          setTimeout(async () => {
-            await DeviceWebSocketManager.sendCommand(deviceId, command);
-          }, currentDeviceDelay);
-        }
-
-        assignedIndex++;
+      
+      // Process messages in background to avoid request timeout
+      setImmediate(async () => {
+        let assignedIndex = 0;
         
-        // Add small delay between queuing messages to spread the load
-        if (assignedIndex < recipients.length) {
-          const queueDelay = Math.floor(Math.random() * 2) + 1; // 1-2 seconds between queue operations
-          await new Promise(resolve => setTimeout(resolve, queueDelay * 1000));
-        }
-      }
+        for (const recipient of recipients) {
+          try {
+            // Select device based on rotation
+            const deviceId = await DeviceRotationEngine.selectDevice(device_ids, rotation_mode);
 
+            // Replace variables in message template
+            let message = sanitizedMessage; // Use sanitized message
+            Object.keys(recipient).forEach(key => {
+              message = message.replace(new RegExp(`{{${key}}}`, 'g'), recipient[key] || '');
+            });
+
+            // Get phone number from recipient and sanitize it
+            const rawPhoneNumber = recipient.phone || recipient.Phone || recipient.number || recipient.Number;
+            const phoneNumber = sanitizePhoneNumber(rawPhoneNumber);
+
+            if (!phoneNumber) {
+              logger.warn('Recipient has invalid phone number:', recipient);
+              assignedIndex++;
+              continue;
+            }
+
+            // Create device log
+            await DeviceLog.create({
+              device_id: deviceId,
+              excel_record_id: excel_record_id,
+              excel_row_index: assignedIndex,
+              recipient_number: phoneNumber,
+              message_content: message,
+              status: 'QUEUED',
+            });
+
+            // Create device command
+            const command = await DeviceCommand.create({
+              device_id: deviceId,
+              command_type: 'SEND_MESSAGE',
+              payload: {
+                recipient_number: phoneNumber,
+                message: message,
+                campaign_name: sanitizedName, // Use sanitized name
+              },
+              priority: 5,
+            });
+
+            // Send command with per-device delay management
+            if (DeviceWebSocketManager.isDeviceOnline(deviceId)) {
+              // Get current delay for this device (starts at 0)
+              let currentDeviceDelay = deviceDelayTracker.get(deviceId) || 0;
+              
+              // Generate random delay between 9-25 seconds for this message
+              const randomDelaySeconds = Math.floor(Math.random() * 17) + 9; // 9-25 seconds
+              
+              // If device is being reused, add extra delay to prevent spam detection
+              if (currentDeviceDelay > 0) {
+                const extraDelay = Math.floor(Math.random() * 10) + 5; // 5-14 seconds extra for reused device
+                currentDeviceDelay += extraDelay * 1000;
+              }
+              
+              // Add base delay
+              currentDeviceDelay += randomDelaySeconds * 1000;
+              
+              // Update tracker
+              deviceDelayTracker.set(deviceId, currentDeviceDelay);
+              
+              setTimeout(async () => {
+                try {
+                  await DeviceWebSocketManager.sendCommand(deviceId, command);
+                  logger.info(`Command sent to device ${deviceId} for ${phoneNumber}`);
+                } catch (error) {
+                  logger.error(`Failed to send command to device ${deviceId}:`, error);
+                }
+              }, currentDeviceDelay);
+            }
+
+            assignedIndex++;
+            
+            // Small delay between operations (non-blocking)
+            if (assignedIndex < recipients.length) {
+              await new Promise(resolve => setTimeout(resolve, 100)); // Reduced to 100ms
+            }
+          } catch (error) {
+            logger.error(`Error queuing message for recipient:`, error);
+            assignedIndex++;
+          }
+        }
+        
+        logger.info(`Background processing completed: ${assignedIndex} messages queued`);
+      });
+
+      // Return success immediately - messages will be processed in background
       res.status(201).json({
         success: true,
         campaign,
-        message: `Campaign created successfully. ${recipients.length} messages queued across ${deviceIdsList.length} devices.`,
+        message: `Campaign created successfully. ${recipients.length} messages are being queued across ${deviceIdsList.length} devices.`,
+        distribution,
+      });
         distribution,
       });
 
@@ -376,88 +395,99 @@ router.post('/manual',
         created_at: campaignRecord.created_at,
       };
 
-      // Queue messages to devices with per-device delay management
-      let queuedCount = 0;
+      // Queue messages to devices - Process asynchronously to avoid timeout
       const deviceDelayTracker = new Map(); // Track cumulative delay per device
-
-      for (const phoneNumber of validNumbers) {
-        // Select device based on rotation
-        const deviceId = await DeviceRotationEngine.selectDevice(device_ids, rotation_mode);
-
-        // Create device log
-        await DeviceLog.create({
-          device_id: deviceId,
-          excel_record_id: null, // Manual campaign
-          excel_row_index: queuedCount,
-          recipient_number: phoneNumber, // Already sanitized
-          message_content: sanitizedMessage, // Use sanitized message
-          status: 'QUEUED',
-        });
-
-        // Create device command
-        const command = await DeviceCommand.create({
-          device_id: deviceId,
-          command_type: 'SEND_MESSAGE',
-          payload: {
-            recipient_number: phoneNumber, // Already sanitized
-            message: sanitizedMessage, // Use sanitized message
-            campaign_name: sanitizedName, // Use sanitized name
-          },
-          priority: 5,
-        });
-
-        // Send command with per-device delay management
-        // Always create the command, send immediately if device is online
-        if (DeviceWebSocketManager.isDeviceOnline(deviceId)) {
-          // Get current delay for this device (starts at 0)
-          let currentDeviceDelay = deviceDelayTracker.get(deviceId) || 0;
-          
-          // Generate random delay between 9-25 seconds for this message
-          const randomDelaySeconds = Math.floor(Math.random() * 17) + 9; // 9-25 seconds
-          
-          // If device is being reused, add extra delay to prevent spam detection
-          if (currentDeviceDelay > 0) {
-            const extraDelay = Math.floor(Math.random() * 10) + 5; // 5-14 seconds extra for reused device
-            currentDeviceDelay += extraDelay * 1000;
-          }
-          
-          // Add base delay
-          currentDeviceDelay += randomDelaySeconds * 1000;
-          
-          // Update tracker
-          deviceDelayTracker.set(deviceId, currentDeviceDelay);
-          
-          setTimeout(async () => {
-            try {
-              await DeviceWebSocketManager.sendCommand(deviceId, command);
-              logger.info(`Command sent to online device ${deviceId} for ${phoneNumber}`);
-            } catch (error) {
-              logger.error(`Failed to send command to device ${deviceId}:`, error);
-              // Update log status to failed if command sending fails
-              await DeviceLog.update(
-                { status: 'FAILED', error_message: error.message },
-                { where: { device_id: deviceId, recipient_number: phoneNumber, status: 'QUEUED' } }
-              );
-            }
-          }, currentDeviceDelay);
-        } else {
-          // Device is offline - command will be sent when device comes online
-          logger.info(`Device ${deviceId} is offline, command queued for ${phoneNumber}`);
-        }
-
-        queuedCount++;
+      
+      // Process messages in background to avoid request timeout
+      setImmediate(async () => {
+        let queuedCount = 0;
         
-        // Add small delay between queuing messages to spread the load
-        if (queuedCount < validNumbers.length) {
-          const queueDelay = Math.floor(Math.random() * 2) + 1; // 1-2 seconds between queue operations
-          await new Promise(resolve => setTimeout(resolve, queueDelay * 1000));
-        }
-      }
+        for (const phoneNumber of validNumbers) {
+          try {
+            // Select device based on rotation
+            const deviceId = await DeviceRotationEngine.selectDevice(device_ids, rotation_mode);
 
+            // Create device log
+            await DeviceLog.create({
+              device_id: deviceId,
+              excel_record_id: null, // Manual campaign
+              excel_row_index: queuedCount,
+              recipient_number: phoneNumber, // Already sanitized
+              message_content: sanitizedMessage, // Use sanitized message
+              status: 'QUEUED',
+            });
+
+            // Create device command
+            const command = await DeviceCommand.create({
+              device_id: deviceId,
+              command_type: 'SEND_MESSAGE',
+              payload: {
+                recipient_number: phoneNumber, // Already sanitized
+                message: sanitizedMessage, // Use sanitized message
+                campaign_name: sanitizedName, // Use sanitized name
+              },
+              priority: 5,
+            });
+
+            // Send command with per-device delay management
+            if (DeviceWebSocketManager.isDeviceOnline(deviceId)) {
+              // Get current delay for this device (starts at 0)
+              let currentDeviceDelay = deviceDelayTracker.get(deviceId) || 0;
+              
+              // Generate random delay between 9-25 seconds for this message
+              const randomDelaySeconds = Math.floor(Math.random() * 17) + 9; // 9-25 seconds
+              
+              // If device is being reused, add extra delay to prevent spam detection
+              if (currentDeviceDelay > 0) {
+                const extraDelay = Math.floor(Math.random() * 10) + 5; // 5-14 seconds extra for reused device
+                currentDeviceDelay += extraDelay * 1000;
+              }
+              
+              // Add base delay
+              currentDeviceDelay += randomDelaySeconds * 1000;
+              
+              // Update tracker
+              deviceDelayTracker.set(deviceId, currentDeviceDelay);
+              
+              setTimeout(async () => {
+                try {
+                  await DeviceWebSocketManager.sendCommand(deviceId, command);
+                  logger.info(`Command sent to online device ${deviceId} for ${phoneNumber}`);
+                } catch (error) {
+                  logger.error(`Failed to send command to device ${deviceId}:`, error);
+                  // Update log status to failed if command sending fails
+                  await DeviceLog.update(
+                    { status: 'FAILED', error_message: error.message },
+                    { where: { device_id: deviceId, recipient_number: phoneNumber, status: 'QUEUED' } }
+                  );
+                }
+              }, currentDeviceDelay);
+            } else {
+              // Device is offline - command will be sent when device comes online
+              logger.info(`Device ${deviceId} is offline, command queued for ${phoneNumber}`);
+            }
+
+            queuedCount++;
+            
+            // Small delay between operations (non-blocking)
+            if (queuedCount < validNumbers.length) {
+              await new Promise(resolve => setTimeout(resolve, 100)); // Reduced to 100ms
+            }
+          } catch (error) {
+            logger.error(`Error queuing message to ${phoneNumber}:`, error);
+          }
+        }
+        
+        logger.info(`Background processing completed: ${queuedCount} messages queued`);
+      });
+      
+      // Return success immediately - messages will be processed in background
       res.status(201).json({
         success: true,
         campaign,
-        message: `Manual campaign created successfully. ${queuedCount} messages queued across ${devices.length} devices.`,
+        message: `Manual campaign created successfully. ${validNumbers.length} messages are being queued across ${devices.length} devices.`,
+        distribution,
+      });
         distribution,
       });
 
