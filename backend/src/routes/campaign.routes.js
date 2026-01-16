@@ -297,8 +297,6 @@ router.post('/',
         message: `Campaign created successfully. ${recipients.length} messages are being queued across ${deviceIdsList.length} devices.`,
         distribution,
       });
-        distribution,
-      });
 
     } catch (error) {
       console.error('Error creating campaign:', error);
@@ -486,8 +484,6 @@ router.post('/manual',
         success: true,
         campaign,
         message: `Manual campaign created successfully. ${validNumbers.length} messages are being queued across ${devices.length} devices.`,
-        distribution,
-      });
         distribution,
       });
 
