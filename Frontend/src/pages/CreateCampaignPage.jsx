@@ -136,18 +136,8 @@ export default function CreateCampaignPage() {
         response = await apiClient.post('/campaigns', campaignData);
       }
       
-      // Update device allocations if campaign was created successfully
-      if (response.data.campaign?.id) {
-        try {
-          await apiClient.put(`/campaigns/${response.data.campaign.id}/device-allocation`, {
-            device_allocations: deviceAllocations,
-          });
-          console.log('Device allocation updated successfully');
-        } catch (allocationError) {
-          console.log('Device allocation will be handled automatically by the system');
-          // Don't show error to user since campaign is working fine
-        }
-      }
+      // Device allocation is handled automatically by backend
+      // No need to call separate endpoint
       
       // Show success message with details
       const successMsg = `✅ Campaign Created Successfully!\n\n${response.data.message}\n\nRedirecting to Campaign Logs...`;
